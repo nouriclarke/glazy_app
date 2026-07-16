@@ -9,14 +9,14 @@ using Avalonia.Media;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
-// using System.Diagnostics;
-// using Microsoft.VisualBasic.FileIO;
 
 namespace ASTEM_DB.ViewModels
 {
     public class MainWindowViewModel : ViewModelBase
     {
         private readonly DatabaseService _db = new();
+        private readonly SearchService _searchService = new();
+
         private ObservableCollection<CardItemViewModel> _cardItems = new ObservableCollection<CardItemViewModel>();
         public ObservableCollection<CardItemViewModel> CardItems
         {
@@ -31,20 +31,14 @@ namespace ASTEM_DB.ViewModels
         public string? SelectedGlazeType
         {
             get => _selectedGlazeType;
-            set
-            {
-                this.RaiseAndSetIfChanged(ref _selectedGlazeType, value);
-            }
+            set => this.RaiseAndSetIfChanged(ref _selectedGlazeType, value);
         }
 
         private string? _selectedSurfaceCondition;
         public string? SelectedSurfaceCondition
         {
             get => _selectedSurfaceCondition;
-            set
-            {
-                this.RaiseAndSetIfChanged(ref _selectedSurfaceCondition, value);
-            }
+            set => this.RaiseAndSetIfChanged(ref _selectedSurfaceCondition, value);
         }
 
         public ObservableCollection<string> FiringTypes { get; } = new();
@@ -53,10 +47,7 @@ namespace ASTEM_DB.ViewModels
         public string? SelectedFiringType
         {
             get => _selectedFiringType;
-            set
-            {
-                this.RaiseAndSetIfChanged(ref _selectedFiringType, value);
-            }
+            set => this.RaiseAndSetIfChanged(ref _selectedFiringType, value);
         }
 
         private CardItemViewModel? _selectedCard;
@@ -92,7 +83,6 @@ namespace ASTEM_DB.ViewModels
             {
                 var clamped = Math.Clamp(value, 0, 255);
                 if (_red == clamped) return;
-
                 _red = clamped;
                 this.RaisePropertyChanged(nameof(Red));
                 UpdateSelectedColor();
@@ -108,13 +98,13 @@ namespace ASTEM_DB.ViewModels
             {
                 var clamped = Math.Clamp(value, 0, 255);
                 if (_green == clamped) return;
-
                 _green = clamped;
                 this.RaisePropertyChanged(nameof(Green));
                 UpdateSelectedColor();
                 labConversion();
             }
         }
+
         private int _blue;
         public int Blue
         {
@@ -123,7 +113,6 @@ namespace ASTEM_DB.ViewModels
             {
                 var clamped = Math.Clamp(value, 0, 255);
                 if (_blue == clamped) return;
-
                 _blue = clamped;
                 this.RaisePropertyChanged(nameof(Blue));
                 UpdateSelectedColor();
@@ -135,29 +124,88 @@ namespace ASTEM_DB.ViewModels
         public double Lightness
         {
             get => _lightness;
-            set
-            {
-                this.RaiseAndSetIfChanged(ref _lightness, value);
-            }
+            set => this.RaiseAndSetIfChanged(ref _lightness, value);
         }
+
         private double _redGreen;
         public double RedGreen
         {
             get => _redGreen;
-            set
-            {
-                this.RaiseAndSetIfChanged(ref _redGreen, value);
-            }
+            set => this.RaiseAndSetIfChanged(ref _redGreen, value);
         }
+
         private double _blueYellow;
         public double BlueYellow
         {
             get => _blueYellow;
-            set
+            set => this.RaiseAndSetIfChanged(ref _blueYellow, value);
+        }
+
+        // --- Image Search ---
+
+        private string? _selectedImagePath;
+        public string? SelectedImagePath
+        {
+            get => _selectedImagePath;
+            set => this.RaiseAndSetIfChanged(ref _selectedImagePath, value);
+        }
+
+        private bool _isImageSearching;
+        public bool IsImageSearching
+        {
+            get => _isImageSearching;
+            set => this.RaiseAndSetIfChanged(ref _isImageSearching, value);
+        }
+
+        private string _imageSearchStatus = "Pick an image to find similar tiles";
+        public string ImageSearchStatus
+        {
+            get => _imageSearchStatus;
+            set => this.RaiseAndSetIfChanged(ref _imageSearchStatus, value);
+        }
+
+        public async void ImageSearchCommand()
+        {
+            if (string.IsNullOrEmpty(SelectedImagePath)) return;
+
+            IsImageSearching = true;
+            ImageSearchStatus = "Searching...";
+            CardItems.Clear();
+            IsSidebarVisible = false;
+
+            try
             {
-                this.RaiseAndSetIfChanged(ref _blueYellow, value);
+                var matches = await _searchService.SearchByImageAsync(SelectedImagePath);
+
+                if (!matches.Any())
+                {
+                    ImageSearchStatus = "No matches found. Make sure tiles have been uploaded.";
+                    IsFilterEmpty = true;
+                    return;
+                }
+
+                IsFilterEmpty = false;
+                ImageSearchStatus = $"Found {matches.Count} similar tile{(matches.Count != 1 ? "s" : "")}";
+
+                foreach (var match in matches)
+                {
+                    var card = await _db.GetCardItemByIdAsync(match.TileId);
+                    if (card != null)
+                        CardItems.Add(card);
+                }
+            }
+            catch (Exception ex)
+            {
+                ImageSearchStatus = $"Search failed: {ex.Message}";
+                Console.WriteLine($"Image search error: {ex}");
+            }
+            finally
+            {
+                IsImageSearching = false;
             }
         }
+
+        // --- Existing glaze search ---
 
         private CancellationTokenSource? _searchCts;
 
@@ -178,10 +226,7 @@ namespace ASTEM_DB.ViewModels
             {
                 await FilterCardItemsAsync(_searchCts.Token);
             }
-            catch (OperationCanceledException)
-            {
-                // Search was canceled, do nothing
-            }
+            catch (OperationCanceledException) { }
         }
 
         private bool _isFilterEmpty;
@@ -190,28 +235,23 @@ namespace ASTEM_DB.ViewModels
             get => _isFilterEmpty;
             set => this.RaiseAndSetIfChanged(ref _isFilterEmpty, value);
         }
+
         private bool _filterByString;
         public bool FilterByString
         {
             get => _filterByString;
             set => this.RaiseAndSetIfChanged(ref _filterByString, value);
         }
-        private async void FilterCardItems()
-        {
-            await FilterCardItemsAsync(CancellationToken.None);
-        }
 
         private async Task FilterCardItemsAsync(CancellationToken cancellationToken)
         {
             var allItems = await _db.GetFilteredCardItemMetadataAsync(SelectedGlazeType, SelectedSurfaceCondition, SelectedFiringType);
-
             var selectedLab = new Lab { L = Lightness, A = RedGreen, B = BlueYellow };
             double threshold = 25.0;
 
             foreach (var item in allItems)
             {
                 cancellationToken.ThrowIfCancellationRequested();
-
                 var lab = new Lab { L = item.ColorL, A = item.ColorA, B = item.ColorB };
                 item.ColorName = GetColorName(lab);
             }
@@ -219,13 +259,9 @@ namespace ASTEM_DB.ViewModels
             var filtered = allItems.Where(item =>
             {
                 if (FilterByString)
-                {
                     return item.ColorName == SelectedColorPalette;
-                }
                 else if (!FilterByColor)
-                {
                     return true;
-                }
                 else
                 {
                     var lab = new Lab { L = item.ColorL, A = item.ColorA, B = item.ColorB };
@@ -240,65 +276,43 @@ namespace ASTEM_DB.ViewModels
             foreach (var item in filtered)
             {
                 cancellationToken.ThrowIfCancellationRequested();
-
                 item.Image = await _db.GetImageByIdAsync(item.Id);
                 CardItems.Add(item);
             }
         }
 
         public ObservableCollection<string> ColorPalettes { get; } = new();
+
         private string? _selectedColorPalette;
         public string? SelectedColorPalette
         {
             get => _selectedColorPalette;
-            set
-            {
-                this.RaiseAndSetIfChanged(ref _selectedColorPalette, value);
-            }
+            set => this.RaiseAndSetIfChanged(ref _selectedColorPalette, value);
         }
 
         private async void LoadData()
         {
             var db = new DatabaseService();
 
-            // Load Glaze Types
             GlazeTypes.Clear();
             GlazeTypes.Add("All");
-
-            var glazeTypes = await db.GetGlazeTypesAsync();
-            foreach (var type in glazeTypes)
+            foreach (var type in await db.GetGlazeTypesAsync())
                 GlazeTypes.Add(type);
 
-            // Load Surface Conditions
             SurfaceConditions.Clear();
             SurfaceConditions.Add("All");
-
-            var surfaceConditions = await db.GetSurfaceCondition();
-            foreach (var sc in surfaceConditions)
+            foreach (var sc in await db.GetSurfaceCondition())
                 SurfaceConditions.Add(sc);
 
             FiringTypes.Clear();
             FiringTypes.Add("All");
-
-            var firingTypes = await db.GetFiringType();
-            foreach (var ft in firingTypes)
+            foreach (var ft in await db.GetFiringType())
                 FiringTypes.Add(ft);
 
-            // Set ColorPalettes
             ColorPalettes.Clear();
-            ColorPalettes.Add("Black");
-            ColorPalettes.Add("White");
-            ColorPalettes.Add("Cream");
-            ColorPalettes.Add("Red");
-            ColorPalettes.Add("Green");
-            ColorPalettes.Add("Yellow");
-            ColorPalettes.Add("Blue");
-            ColorPalettes.Add("Cyan");
-            ColorPalettes.Add("Magenta");
-            ColorPalettes.Add("Pink");
-            ColorPalettes.Add("Brown");
+            foreach (var c in new[] { "Black", "White", "Cream", "Red", "Green", "Yellow", "Blue", "Cyan", "Magenta", "Pink", "Brown" })
+                ColorPalettes.Add(c);
 
-            // Set default filters
             SelectedGlazeType = "All";
             SelectedSurfaceCondition = "All";
             SelectedFiringType = "All";
@@ -318,10 +332,7 @@ namespace ASTEM_DB.ViewModels
         public bool FilterByColor
         {
             get => _filterByColor;
-            set
-            {
-                this.RaiseAndSetIfChanged(ref _filterByColor, value);
-            }
+            set => this.RaiseAndSetIfChanged(ref _filterByColor, value);
         }
 
         private Color _selectedColor;
@@ -333,7 +344,6 @@ namespace ASTEM_DB.ViewModels
                 if (value == _selectedColor) return;
                 _selectedColor = value;
                 this.RaisePropertyChanged(nameof(SelectedColor));
-
                 _red = value.R;
                 _green = value.G;
                 _blue = value.B;
@@ -343,35 +353,34 @@ namespace ASTEM_DB.ViewModels
                 labConversion();
             }
         }
+
         private void UpdateSelectedColor()
         {
             var newColor = Color.FromRgb((byte)Red, (byte)Green, (byte)Blue);
             if (_selectedColor == newColor) return;
-
             _selectedColor = newColor;
             this.RaisePropertyChanged(nameof(SelectedColor));
         }
 
         private static readonly Dictionary<string, Lab> BasicColors = new()
         {
-            { "Black", new Lab { L = 0,   A = 0,   B = 0   } },
-            { "White", new Lab { L = 100, A = 0,   B = 0   } },
-            { "Cream", new Lab { L = 95,  A = -2,  B = 18  } },
-            { "Red",   new Lab { L = 53,  A = 80,  B = 67  } },
-            { "Green", new Lab { L = 87,  A = -86, B = 83  } },
-            { "Blue",  new Lab { L = 32,  A = 79,  B = -108} },
-            { "Yellow",new Lab { L = 97,  A = -21, B = 94  } },
-            { "Cyan",  new Lab { L = 91,  A = -48, B = -14 } },
-            { "Magenta",new Lab{ L = 60,  A = 98,  B = -60 } },
-            { "Brown", new Lab { L = 37,  A = 23,  B = 17  } },
-            { "Pink",  new Lab { L = 81,  A = 15,  B = 6   } }
+            { "Black",   new Lab { L = 0,   A = 0,   B = 0    } },
+            { "White",   new Lab { L = 100, A = 0,   B = 0    } },
+            { "Cream",   new Lab { L = 95,  A = -2,  B = 18   } },
+            { "Red",     new Lab { L = 53,  A = 80,  B = 67   } },
+            { "Green",   new Lab { L = 87,  A = -86, B = 83   } },
+            { "Blue",    new Lab { L = 32,  A = 79,  B = -108 } },
+            { "Yellow",  new Lab { L = 97,  A = -21, B = 94   } },
+            { "Cyan",    new Lab { L = 91,  A = -48, B = -14  } },
+            { "Magenta", new Lab { L = 60,  A = 98,  B = -60  } },
+            { "Brown",   new Lab { L = 37,  A = 23,  B = 17   } },
+            { "Pink",    new Lab { L = 81,  A = 15,  B = 6    } }
         };
 
         public static string GetColorName(Lab inputLab)
         {
             string colorName = "Unknown";
             double minDeltaE = double.MaxValue;
-
             foreach (var (name, lab) in BasicColors)
             {
                 double deltaE = inputLab.Compare(lab, new CieDe2000Comparison());
@@ -381,7 +390,6 @@ namespace ASTEM_DB.ViewModels
                     colorName = name;
                 }
             }
-            // Only assign if close enough
             return minDeltaE <= 30 ? colorName : "Other";
         }
     }
