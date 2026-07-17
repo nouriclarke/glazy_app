@@ -149,70 +149,6 @@ namespace ASTEM_DB.ViewModels
             set => this.RaiseAndSetIfChanged(ref _blueYellow, value);
         }
 
-        // --- Image Search ---
-
-        private string? _selectedImagePath;
-        public string? SelectedImagePath
-        {
-            get => _selectedImagePath;
-            set => this.RaiseAndSetIfChanged(ref _selectedImagePath, value);
-        }
-
-        private bool _isImageSearching;
-        public bool IsImageSearching
-        {
-            get => _isImageSearching;
-            set => this.RaiseAndSetIfChanged(ref _isImageSearching, value);
-        }
-
-        private string _imageSearchStatus = "Pick an image to find similar tiles";
-        public string ImageSearchStatus
-        {
-            get => _imageSearchStatus;
-            set => this.RaiseAndSetIfChanged(ref _imageSearchStatus, value);
-        }
-
-        public async void ImageSearchCommand()
-        {
-            if (string.IsNullOrEmpty(SelectedImagePath)) return;
-
-            IsImageSearching = true;
-            ImageSearchStatus = "Searching...";
-            CardItems.Clear();
-            IsSidebarVisible = false;
-
-            try
-            {
-                var matches = await _searchService.SearchByImageAsync(SelectedImagePath);
-
-                if (!matches.Any())
-                {
-                    ImageSearchStatus = "No matches found. Make sure tiles have been uploaded.";
-                    IsFilterEmpty = true;
-                    return;
-                }
-
-                IsFilterEmpty = false;
-                ImageSearchStatus = $"Found {matches.Count} similar tile{(matches.Count != 1 ? "s" : "")}";
-
-                foreach (var match in matches)
-                {
-                    var card = await _db.GetCardItemByIdAsync(match.TileId);
-                    if (card != null)
-                        CardItems.Add(card);
-                }
-            }
-            catch (Exception ex)
-            {
-                ImageSearchStatus = $"Search failed: {ex.Message}";
-                Console.WriteLine($"Image search error: {ex}");
-            }
-            finally
-            {
-                IsImageSearching = false;
-            }
-        }
-
         // --- Existing glaze search ---
 
         private CancellationTokenSource? _searchCts;
@@ -311,90 +247,171 @@ namespace ASTEM_DB.ViewModels
             get => _aiTrainingStatus;
             set => this.RaiseAndSetIfChanged(ref _aiTrainingStatus, value);
         }
-
+        //here
         private async Task ExecuteAiSearchCommandAsync()
         {
             var prompt = AiSearchPrompt?.Trim();
-            if (string.IsNullOrWhiteSpace(prompt))
+            var imagePath = AiSearchImagePath?.Trim();
+
+            bool hasText = !string.IsNullOrWhiteSpace(prompt);
+            bool hasImage = !string.IsNullOrWhiteSpace(imagePath) && File.Exists(imagePath);
+
+            if (!hasText && !hasImage)
             {
-                AiSearchStatus = string.IsNullOrWhiteSpace(AiSearchImagePath)
-                    ? "Enter an AI search message first."
-                    : "Image selected. The visual image-search ranking pipeline is not connected yet.";
+                AiSearchStatus = "Enter a search prompt or attach an image.";
                 return;
             }
 
             _aiSearchCts?.Cancel();
             _aiSearchCts = new CancellationTokenSource();
             var cancellationToken = _aiSearchCts.Token;
-            var resolvedPrompt = ResolveAiConversationPrompt(prompt);
 
-            AiChatMessages.Add(new AiChatMessageViewModel("You", prompt));
-            AiSearchPrompt = string.Empty;
-            AiResolvedSearchPrompt = resolvedPrompt;
+            IsAiSearchLoading = true;
+            CardItems.Clear();
+            SelectedCard = null;
+            IsSidebarVisible = false;
 
             try
             {
-                IsAiSearchLoading = true;
-                AiSearchStatus = $"Searching for: {resolvedPrompt}";
-
-                var response = await RunLocalAiSearchAsync(resolvedPrompt, cancellationToken);
-                cancellationToken.ThrowIfCancellationRequested();
-                var idToScore = response.Results.ToDictionary(result => result.Id, result => result.FinalScore);
-                var items = await _db.GetCardItemsByIdsAsync(response.Results.Select(result => result.Id));
-                cancellationToken.ThrowIfCancellationRequested();
-
-                CardItems.Clear();
-                SelectedCard = null;
-                IsSidebarVisible = false;
-
-                foreach (var item in items)
-                {
-                    if (idToScore.TryGetValue(item.Id, out var score))
-                    {
-                        var matchScore = response.Results.FirstOrDefault(result => result.Id == item.Id)?.MatchScore ?? 0;
-                        item.AiScore = matchScore > 0 ? matchScore : score;
-                    }
-
-                    if (response.Results.FirstOrDefault(result => result.Id == item.Id) is { } aiResult)
-                    {
-                        item.AiClipScore = aiResult.ClipScore;
-                        item.AiColorScore = aiResult.ColorScore;
-                        item.AiMetadataScore = aiResult.MetadataScore;
-                        item.AiVisualScore = aiResult.VisualScore;
-                        item.AiVisualPenalty = aiResult.VisualPenalty;
-                        item.AiExclusionPenalty = aiResult.Features?.ExclusionPenalty ?? 0;
-                        item.AiFeedbackStatus = string.Empty;
-                    }
-
-                    var lab = new Lab { L = item.ColorL, A = item.ColorA, B = item.ColorB };
-                    item.ColorName = GetColorName(lab);
-                    CardItems.Add(item);
-                }
-
-                IsFilterEmpty = CardItems.Count == 0;
-                AiSearchStatus = CardItems.Count == 0
-                    ? "No AI matches found in the local database."
-                    : $"Showing top {CardItems.Count} local AI matches from {response.SearchedRows} database tiles.";
-                AiChatMessages.Add(new AiChatMessageViewModel(
-                    "Glazy",
-                    CardItems.Count == 0
-                        ? $"No matches found for \"{resolvedPrompt}\"."
-                        : $"Showing {CardItems.Count} matches for \"{resolvedPrompt}\"."
-                ));
+                if (hasImage && hasText)
+                    await ExecuteCombinedSearchAsync(prompt!, imagePath!, cancellationToken);
+                else if (hasImage)
+                    await ExecuteClipSearchAsync(imagePath!, cancellationToken);
+                else
+                    await ExecuteTextSearchAsync(prompt!, cancellationToken);
             }
             catch (OperationCanceledException)
             {
-                AiSearchStatus = "AI search was canceled.";
+                AiSearchStatus = "Search was canceled.";
             }
             catch (Exception ex)
             {
-                AiSearchStatus = $"AI search failed: {ex.Message}";
+                AiSearchStatus = $"Search failed: {ex.Message}";
                 AiChatMessages.Add(new AiChatMessageViewModel("Glazy", AiSearchStatus));
             }
             finally
             {
                 IsAiSearchLoading = false;
             }
+        }
+
+        private async Task ExecuteClipSearchAsync(string imagePath, CancellationToken cancellationToken)
+        {
+            AiSearchStatus = "Searching by image similarity...";
+            AiChatMessages.Add(new AiChatMessageViewModel("You", "[Image search]"));
+
+            var matches = await _searchService.SearchByImageAsync(imagePath, nResults: 20);
+
+            if (!matches.Any())
+            {
+                AiSearchStatus = "No similar tiles found. Make sure tiles have been uploaded.";
+                IsFilterEmpty = true;
+                return;
+            }
+
+            var scoreById = new Dictionary<string, double>();
+            foreach (var m in matches)
+                scoreById[m.TileId] = m.Score;
+            var items = await _db.GetCardItemsByIdsAsync(matches.Select(m => m.TileId));
+
+            foreach (var item in items)
+            {
+                if (scoreById.TryGetValue(item.Id, out var dist))
+                    item.AiScore = Math.Exp(-dist / 2.0);
+                var lab = new Lab { L = item.ColorL, A = item.ColorA, B = item.ColorB };
+                item.ColorName = GetColorName(lab);
+                CardItems.Add(item);
+            }
+
+            IsFilterEmpty = !CardItems.Any();
+            AiSearchStatus = $"Found {CardItems.Count} visually similar tiles.";
+            AiChatMessages.Add(new AiChatMessageViewModel("Glazy", AiSearchStatus));
+        }
+
+        private async Task ExecuteCombinedSearchAsync(string prompt, string imagePath, CancellationToken cancellationToken)
+        {
+            AiSearchStatus = "Running combined visual + text search...";
+            var resolvedPrompt = ResolveAiConversationPrompt(prompt);
+            AiChatMessages.Add(new AiChatMessageViewModel("You", $"[Image] + {prompt}"));
+            AiSearchPrompt = string.Empty;
+            AiResolvedSearchPrompt = resolvedPrompt;
+
+            var clipMatches = await _searchService.SearchByImageAsync(imagePath, nResults: 50);
+            var clipDistanceById = clipMatches.ToDictionary(m => m.TileId, m => m.Score);
+
+            cancellationToken.ThrowIfCancellationRequested();
+
+            AiSearchStatus = "Re-ranking by text and color...";
+            var textResponse = await RunLocalAiSearchAsync(resolvedPrompt, cancellationToken);
+            var textScoreById = textResponse.Results.ToDictionary(r => r.Id, r => r.FinalScore);
+
+            cancellationToken.ThrowIfCancellationRequested();
+
+            var combined = clipDistanceById
+                .Select(kvp => new
+                {
+                    Id = kvp.Key,
+                    ClipSim = Math.Exp(-kvp.Value / 2.0),
+                    TextScore = textScoreById.TryGetValue(kvp.Key, out var ts) ? ts : 0.0
+                })
+                .Select(x => new
+                {
+                    x.Id,
+                    CombinedScore = 0.6 * x.ClipSim + 0.4 * x.TextScore
+                })
+                .OrderByDescending(x => x.CombinedScore)
+                .ToList();
+
+            var items = await _db.GetCardItemsByIdsAsync(combined.Select(x => x.Id));
+            var scoreMap = combined.ToDictionary(x => x.Id, x => x.CombinedScore);
+
+            foreach (var item in items)
+            {
+                if (scoreMap.TryGetValue(item.Id, out var score))
+                    item.AiScore = score;
+                var lab = new Lab { L = item.ColorL, A = item.ColorA, B = item.ColorB };
+                item.ColorName = GetColorName(lab);
+                CardItems.Add(item);
+            }
+
+            var sorted = CardItems.OrderByDescending(c => c.AiScore).ToList();
+            CardItems.Clear();
+            foreach (var item in sorted)
+                CardItems.Add(item);
+
+            IsFilterEmpty = !CardItems.Any();
+            AiSearchStatus = $"Found {CardItems.Count} tiles matching visual + text criteria.";
+            AiChatMessages.Add(new AiChatMessageViewModel("Glazy", AiSearchStatus));
+        }
+
+        private async Task ExecuteTextSearchAsync(string prompt, CancellationToken cancellationToken)
+        {
+            var resolvedPrompt = ResolveAiConversationPrompt(prompt);
+            AiChatMessages.Add(new AiChatMessageViewModel("You", prompt));
+            AiSearchPrompt = string.Empty;
+            AiResolvedSearchPrompt = resolvedPrompt;
+            AiSearchStatus = $"Searching for: {resolvedPrompt}";
+
+            var response = await RunLocalAiSearchAsync(resolvedPrompt, cancellationToken);
+            cancellationToken.ThrowIfCancellationRequested();
+
+            var idToScore = response.Results.ToDictionary(r => r.Id, r => r.FinalScore);
+            var items = await _db.GetCardItemsByIdsAsync(response.Results.Select(r => r.Id));
+
+            foreach (var item in items)
+            {
+                if (idToScore.TryGetValue(item.Id, out var score))
+                    item.AiScore = score;
+                var lab = new Lab { L = item.ColorL, A = item.ColorA, B = item.ColorB };
+                item.ColorName = GetColorName(lab);
+                CardItems.Add(item);
+            }
+
+            IsFilterEmpty = !CardItems.Any();
+            AiSearchStatus = CardItems.Count == 0
+                ? "No matches found."
+                : $"Found {CardItems.Count} matches for \"{resolvedPrompt}\".";
+            AiChatMessages.Add(new AiChatMessageViewModel("Glazy", AiSearchStatus));
         }
 
         public void SetPendingAiSearchImage(string imagePath)
@@ -405,7 +422,7 @@ namespace ASTEM_DB.ViewModels
             var fileName = Path.GetFileName(imagePath);
             AiSearchImagePath = imagePath;
             AiSearchImageLabel = $"Image: {fileName}";
-            AiSearchStatus = "Image selected. The visual image-search ranking pipeline is not connected yet.";
+            AiSearchStatus = "Image selected. Add a text prompt or press Send to search by image.";
             AiChatMessages.Add(new AiChatMessageViewModel("You", $"Image: {fileName}"));
         }
 

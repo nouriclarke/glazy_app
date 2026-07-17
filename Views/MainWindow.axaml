@@ -79,66 +79,6 @@
                         </StackPanel>
                     </ScrollViewer>
                 </TabItem>
-                <!--  Tab 2: Image Search  -->
-                <TabItem
-                    FontSize="20"
-                    FontWeight="DemiBold"
-                    Header="Image Search">
-                    <StackPanel Margin="10" Spacing="12">
-                        <TextBlock
-                            FontSize="12"
-                            Foreground="#666666"
-                            TextWrapping="Wrap"
-                            Text="Upload a tile image to find visually similar tiles in the collection." />
-
-                        <!-- Image preview box -->
-                        <Border
-                            Height="180"
-                            Background="#E0E0E0"
-                            BorderBrush="#CCCCCC"
-                            BorderThickness="1"
-                            CornerRadius="4">
-                            <Panel>
-                                <TextBlock
-                                    HorizontalAlignment="Center"
-                                    VerticalAlignment="Center"
-                                    FontSize="12"
-                                    Foreground="#999999"
-                                    IsVisible="{Binding SelectedImagePath, Converter={x:Static ObjectConverters.IsNull}}"
-                                    Text="No image selected" />
-                                <Image
-                                    Margin="8"
-                                    IsVisible="{Binding SelectedImagePath, Converter={x:Static ObjectConverters.IsNotNull}}"
-                                    Stretch="Uniform"
-                                    x:Name="ImagePreview" />
-                            </Panel>
-                        </Border>
-
-                        <!-- Selected file path -->
-
-                        <Button
-                            HorizontalAlignment="Stretch"
-                            Click="OnPickImageClicked"
-                            Content="Choose Image..." />
-
-                        <Button
-                            HorizontalAlignment="Stretch"
-                            Command="{Binding ImageSearchCommand}"
-                            IsEnabled="{Binding SelectedImagePath, Converter={x:Static ObjectConverters.IsNotNull}}"
-                            Content="Find Similar Tiles" />
-
-                        <TextBlock
-                            FontSize="12"
-                            Foreground="#555555"
-                            TextWrapping="Wrap"
-                            Text="{Binding ImageSearchStatus}" />
-
-                        <ProgressBar
-                            IsIndeterminate="True"
-                            IsVisible="{Binding IsImageSearching}"
-                            Height="4" />
-                    </StackPanel>
-                </TabItem>
                 <TabItem
                     FontSize="20"
                     FontWeight="DemiBold"

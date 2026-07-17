@@ -17,16 +17,14 @@ namespace ASTEM_DB.Services
         };
         private const string ApiBase = "http://localhost:8000";
 
-        public async Task<List<SearchMatch>> SearchByImageAsync(string imagePath)
+        public async Task<List<SearchMatch>> SearchByImageAsync(string imagePath, int nResults = 10)
         {
             await using var stream = File.OpenRead(imagePath);
             using var content = new MultipartFormDataContent();
             using var streamContent = new StreamContent(stream);
-
-            // Let the server infer content type from the filename
             content.Add(streamContent, "file", Path.GetFileName(imagePath));
 
-            var response = await _httpClient.PostAsync($"{ApiBase}/search/image", content);
+            var response = await _httpClient.PostAsync($"{ApiBase}/search/image?n_results={nResults}", content);
             var json = await response.Content.ReadAsStringAsync();
 
             using var doc = JsonDocument.Parse(json);

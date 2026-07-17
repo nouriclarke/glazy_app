@@ -24,7 +24,7 @@ namespace ASTEM_DB.Services
 
             var port = Environment.GetEnvironmentVariable("DB_PORT") ?? "3306";
             var user = Environment.GetEnvironmentVariable("DB_USER") ?? "ceramadmin";
-            var password = Environment.GetEnvironmentVariable("DB_PASSWORD") ?? "glazed-dev-password";
+            var password = Environment.GetEnvironmentVariable("DB_PASSWORD") ?? "J9J9NasakeMuyouAsuteroidoBerutoNo";
             var database = Environment.GetEnvironmentVariable("DB_NAME")
                 ?? Environment.GetEnvironmentVariable("MYSQL_DATABASE")
                 ?? "tilearchive";

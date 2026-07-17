@@ -35,38 +35,6 @@ namespace ASTEM_DB.Views
             }
         }
 
-        private async void OnPickImageClicked(object? sender, RoutedEventArgs e)
-        {
-            var files = await this.StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
-            {
-                Title = "Select a tile image",
-                AllowMultiple = false,
-                FileTypeFilter = new[]
-                {
-                    new FilePickerFileType("Images")
-                    {
-                        Patterns = new[] { "*.jpg", "*.jpeg", "*.png", "*.bmp" }
-                    }
-                }
-            });
-
-            if (files.Count == 0) return;
-
-            var path = files[0].Path.LocalPath;
-
-            if (this.DataContext is MainWindowViewModel vm)
-            {
-                vm.SelectedImagePath = path;
-
-                // Load and show the preview image
-                var preview = this.FindControl<Image>("ImagePreview");
-                if (preview != null)
-                {
-                    await using var stream = File.OpenRead(path);
-                    preview.Source = new Bitmap(stream);
-                }
-            }
-        }
         private async void OnAiImageButtonClicked(object? sender, RoutedEventArgs e)
         {
             if (DataContext is not MainWindowViewModel vm)
