@@ -7,13 +7,30 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
+using System.Linq;
 using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 namespace ASTEM_DB.Services
 {
     public class DatabaseService
     {
-        private readonly string _connectionString = "server=localhost;port=3306;user=ceramadmin;password=J9J9NasakeMuyouAsuteroidoBerutoNo;database=tilearchive;Charset=utf8mb4;";
+        private readonly string _connectionString = BuildConnectionString();
+
+        private static string BuildConnectionString()
+        {
+            var host = Environment.GetEnvironmentVariable("DB_HOST") ?? "127.0.0.1";
+            if (host == "tile-db")
+                host = "127.0.0.1";
+
+            var port = Environment.GetEnvironmentVariable("DB_PORT") ?? "3306";
+            var user = Environment.GetEnvironmentVariable("DB_USER") ?? "ceramadmin";
+            var password = Environment.GetEnvironmentVariable("DB_PASSWORD") ?? "glazed-dev-password";
+            var database = Environment.GetEnvironmentVariable("DB_NAME")
+                ?? Environment.GetEnvironmentVariable("MYSQL_DATABASE")
+                ?? "tilearchive";
+
+            return $"server={host};port={port};user={user};password={password};database={database};Charset=utf8mb4;";
+        }
 
         public async Task<List<string>> GetGlazeTypesAsync()
         {
@@ -91,13 +108,24 @@ namespace ASTEM_DB.Services
 
             string whereClause = filters.Count > 0 ? "WHERE " + string.Join(" AND ", filters) : "";
             string query = $@"
-                SELECT tp.ID, tp.Image, tp.Color_L, tp.Color_A, tp.Color_B,
-                       tp.FiringType, tp.SoilType, tp.ChemicalComposition,
-                       gt.Name AS GlazeType, sc.Name AS SurfaceCondition
-                FROM testpiece tp
-                LEFT JOIN glazetype gt ON tp.GlazeTypeID = gt.ID
-                LEFT JOIN surfacecondition sc ON tp.SurfaceConditionID = sc.ID
-                {whereClause};";
+        SELECT 
+            tp.ID,
+            tp.Image,
+            tp.Color_L,
+            tp.Color_A,
+            tp.Color_B,
+            tp.FiringType,
+            tp.SoilType,
+            tp.ChemicalComposition,
+            tp.AutoTags,
+            tp.AutoKeywords,
+            gt.Name AS GlazeType,
+            sc.Name AS SurfaceCondition
+        FROM testpiece tp
+        LEFT JOIN glazetype gt ON tp.GlazeTypeID = gt.ID
+        LEFT JOIN surfacecondition sc ON tp.SurfaceConditionID = sc.ID
+        {whereClause};
+    ";
 
             await using var cmd = new MySqlCommand(query, conn);
             if (query.Contains("@GlazeType")) cmd.Parameters.AddWithValue("@GlazeType", glazeType);
@@ -115,7 +143,7 @@ namespace ASTEM_DB.Services
                 items.Add(new CardItemViewModel
                 {
                     Id = reader["ID"].ToString()!,
-                    Image = new Bitmap(memoryStream),
+                    Image = new Avalonia.Media.Imaging.Bitmap(memoryStream),
                     GlazeType = reader["GlazeType"].ToString() ?? "Unknown",
                     SurfaceCondition = reader["SurfaceCondition"].ToString() ?? "Unknown",
                     ColorL = Convert.ToDouble(reader["Color_L"]),
@@ -124,7 +152,9 @@ namespace ASTEM_DB.Services
                     Lab = $"{reader["Color_L"]}, {reader["Color_A"]}, {reader["Color_B"]}",
                     FiringType = reader["FiringType"].ToString() ?? "",
                     SoilType = reader["SoilType"].ToString() ?? "",
-                    ChemicalComposition = reader["ChemicalComposition"].ToString() ?? ""
+                    ChemicalComposition = reader["ChemicalComposition"].ToString() ?? "",
+                    AutoTags = reader["AutoTags"].ToString() ?? "",
+                    AutoKeywords = reader["AutoKeywords"].ToString() ?? ""
                 });
             }
             return items;
@@ -146,13 +176,23 @@ namespace ASTEM_DB.Services
 
             string whereClause = filters.Count > 0 ? "WHERE " + string.Join(" AND ", filters) : "";
             string query = $@"
-                SELECT tp.ID, tp.Color_L, tp.Color_A, tp.Color_B,
-                       tp.FiringType, tp.SoilType, tp.ChemicalComposition,
-                       gt.Name AS GlazeType, sc.Name AS SurfaceCondition
-                FROM testpiece tp
-                LEFT JOIN glazetype gt ON tp.GlazeTypeID = gt.ID
-                LEFT JOIN surfacecondition sc ON tp.SurfaceConditionID = sc.ID
-                {whereClause};";
+        SELECT 
+            tp.ID,
+            tp.Color_L,
+            tp.Color_A,
+            tp.Color_B,
+            tp.FiringType,
+            tp.SoilType,
+            tp.ChemicalComposition,
+            tp.AutoTags,
+            tp.AutoKeywords,
+            gt.Name AS GlazeType,
+            sc.Name AS SurfaceCondition
+        FROM testpiece tp
+        LEFT JOIN glazetype gt ON tp.GlazeTypeID = gt.ID
+        LEFT JOIN surfacecondition sc ON tp.SurfaceConditionID = sc.ID
+        {whereClause};
+    ";
 
             await using var cmd = new MySqlCommand(query, conn);
             if (query.Contains("@GlazeType")) cmd.Parameters.AddWithValue("@GlazeType", glazeType);
@@ -173,7 +213,9 @@ namespace ASTEM_DB.Services
                     Lab = $"{reader["Color_L"]}, {reader["Color_A"]}, {reader["Color_B"]}",
                     FiringType = reader["FiringType"].ToString() ?? "",
                     SoilType = reader["SoilType"].ToString() ?? "",
-                    ChemicalComposition = reader["ChemicalComposition"].ToString() ?? ""
+                    ChemicalComposition = reader["ChemicalComposition"].ToString() ?? "",
+                    AutoTags = reader["AutoTags"].ToString() ?? "",
+                    AutoKeywords = reader["AutoKeywords"].ToString() ?? ""
                 });
             }
             return items;
@@ -206,8 +248,9 @@ namespace ASTEM_DB.Services
 
             string query = @"
                 SELECT tp.ID, tp.Image, tp.Color_L, tp.Color_A, tp.Color_B,
-                       tp.FiringType, tp.SoilType, tp.ChemicalComposition,
-                       gt.Name AS GlazeType, sc.Name AS SurfaceCondition
+                    tp.FiringType, tp.SoilType, tp.ChemicalComposition,
+                    tp.AutoTags, tp.AutoKeywords,
+                    gt.Name AS GlazeType, sc.Name AS SurfaceCondition
                 FROM testpiece tp
                 LEFT JOIN glazetype gt ON tp.GlazeTypeID = gt.ID
                 LEFT JOIN surfacecondition sc ON tp.SurfaceConditionID = sc.ID
@@ -234,10 +277,78 @@ namespace ASTEM_DB.Services
                     Lab = $"{reader["Color_L"]}, {reader["Color_A"]}, {reader["Color_B"]}",
                     FiringType = reader["FiringType"].ToString() ?? "",
                     SoilType = reader["SoilType"].ToString() ?? "",
-                    ChemicalComposition = reader["ChemicalComposition"].ToString() ?? ""
+                    ChemicalComposition = reader["ChemicalComposition"].ToString() ?? "",
+                    AutoTags = reader["AutoTags"].ToString() ?? "",
+                    AutoKeywords = reader["AutoKeywords"].ToString() ?? ""
                 };
             }
             return null;
+        }
+
+        public async Task<List<CardItemViewModel>> GetCardItemsByIdsAsync(IEnumerable<string> ids)
+        {
+            var idList = ids
+                .Select(id => id.Trim())
+                .Where(id => uint.TryParse(id, out _))
+                .Distinct()
+                .ToList();
+
+            if (idList.Count == 0)
+                return new List<CardItemViewModel>();
+
+            await using var conn = new MySqlConnection(_connectionString);
+            await conn.OpenAsync();
+
+            var parameterNames = idList.Select((_, index) => $"@id{index}").ToList();
+            string query = $@"
+                SELECT tp.ID, tp.Image, tp.Color_L, tp.Color_A, tp.Color_B,
+                    tp.FiringType, tp.SoilType, tp.ChemicalComposition,
+                    tp.AutoTags, tp.AutoKeywords,
+                    gt.Name AS GlazeType, sc.Name AS SurfaceCondition
+                FROM testpiece tp
+                LEFT JOIN glazetype gt ON tp.GlazeTypeID = gt.ID
+                LEFT JOIN surfacecondition sc ON tp.SurfaceConditionID = sc.ID
+                WHERE tp.ID IN ({string.Join(", ", parameterNames)});";
+
+            await using var cmd = new MySqlCommand(query, conn);
+            for (int i = 0; i < idList.Count; i++)
+                cmd.Parameters.AddWithValue(parameterNames[i], idList[i]);
+
+            var itemById = new Dictionary<string, CardItemViewModel>();
+            await using var reader = await cmd.ExecuteReaderAsync();
+
+            while (await reader.ReadAsync())
+            {
+                var id = reader["ID"].ToString()!;
+                var item = new CardItemViewModel
+                {
+                    Id = id,
+                    GlazeType = reader["GlazeType"].ToString() ?? "Unknown",
+                    SurfaceCondition = reader["SurfaceCondition"].ToString() ?? "Unknown",
+                    ColorL = Convert.ToDouble(reader["Color_L"]),
+                    ColorA = Convert.ToDouble(reader["Color_A"]),
+                    ColorB = Convert.ToDouble(reader["Color_B"]),
+                    Lab = $"{reader["Color_L"]}, {reader["Color_A"]}, {reader["Color_B"]}",
+                    FiringType = reader["FiringType"].ToString() ?? "",
+                    SoilType = reader["SoilType"].ToString() ?? "",
+                    ChemicalComposition = reader["ChemicalComposition"].ToString() ?? "",
+                    AutoTags = reader["AutoTags"].ToString() ?? "",
+                    AutoKeywords = reader["AutoKeywords"].ToString() ?? ""
+                };
+
+                if (reader["Image"] is byte[] imageBytes && imageBytes.Length > 0)
+                {
+                    using var memoryStream = new MemoryStream(imageBytes);
+                    item.Image = new Avalonia.Media.Imaging.Bitmap(memoryStream);
+                }
+
+                itemById[id] = item;
+            }
+
+            return idList
+                .Where(itemById.ContainsKey)
+                .Select(id => itemById[id])
+                .ToList();
         }
     }
 }

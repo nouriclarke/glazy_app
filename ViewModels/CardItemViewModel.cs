@@ -22,6 +22,17 @@ namespace ASTEM_DB.ViewModels
         private string _surfaceConditionString = string.Empty;
         private string _colorName = string.Empty;
         private string _imagePath = string.Empty;
+        private string _autoTags = string.Empty;
+        private string _autoKeywords = string.Empty;
+        private double _aiScore;
+        private string _aiScoreString = string.Empty;
+        private double _aiClipScore;
+        private double _aiColorScore;
+        private double _aiMetadataScore;
+        private double _aiVisualScore;
+        private double _aiVisualPenalty;
+        private double _aiExclusionPenalty;
+        private string _aiFeedbackStatus = string.Empty;
         public string Id
         {
             get => _id;
@@ -124,7 +135,7 @@ namespace ASTEM_DB.ViewModels
         }
         public string SurfaceCondition
         {
-            get => _firingType;
+            get => _surfaceCondition;
             set
             {
                 this.RaiseAndSetIfChanged(ref _surfaceCondition, value);
@@ -140,6 +151,76 @@ namespace ASTEM_DB.ViewModels
         {
             get => _colorName;
             set => this.RaiseAndSetIfChanged(ref _colorName, value);
+        }
+
+        public string AutoTags
+        {
+            get => _autoTags;
+            set => this.RaiseAndSetIfChanged(ref _autoTags, value);
+        }
+
+        public string AutoKeywords
+        {
+            get => _autoKeywords;
+            set => this.RaiseAndSetIfChanged(ref _autoKeywords, value);
+        }
+
+        public double AiScore
+        {
+            get => _aiScore;
+            set
+            {
+                this.RaiseAndSetIfChanged(ref _aiScore, value);
+                AiScoreString = value > 0 ? $"AI Match: {System.Math.Clamp(value, 0, 1):P1}" : string.Empty;
+            }
+        }
+
+        public string AiScoreString
+        {
+            get => _aiScoreString;
+            private set => this.RaiseAndSetIfChanged(ref _aiScoreString, value);
+        }
+
+        public double AiClipScore
+        {
+            get => _aiClipScore;
+            set => this.RaiseAndSetIfChanged(ref _aiClipScore, value);
+        }
+
+        public double AiColorScore
+        {
+            get => _aiColorScore;
+            set => this.RaiseAndSetIfChanged(ref _aiColorScore, value);
+        }
+
+        public double AiMetadataScore
+        {
+            get => _aiMetadataScore;
+            set => this.RaiseAndSetIfChanged(ref _aiMetadataScore, value);
+        }
+
+        public double AiVisualScore
+        {
+            get => _aiVisualScore;
+            set => this.RaiseAndSetIfChanged(ref _aiVisualScore, value);
+        }
+
+        public double AiVisualPenalty
+        {
+            get => _aiVisualPenalty;
+            set => this.RaiseAndSetIfChanged(ref _aiVisualPenalty, value);
+        }
+
+        public double AiExclusionPenalty
+        {
+            get => _aiExclusionPenalty;
+            set => this.RaiseAndSetIfChanged(ref _aiExclusionPenalty, value);
+        }
+
+        public string AiFeedbackStatus
+        {
+            get => _aiFeedbackStatus;
+            set => this.RaiseAndSetIfChanged(ref _aiFeedbackStatus, value);
         }
     }
 }

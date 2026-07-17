@@ -1,3 +1,4 @@
+using System;
 using ASTEM_DB.ViewModels;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
@@ -64,6 +65,39 @@ namespace ASTEM_DB.Views
                     await using var stream = File.OpenRead(path);
                     preview.Source = new Bitmap(stream);
                 }
+            }
+        }
+        private async void OnAiImageButtonClicked(object? sender, RoutedEventArgs e)
+        {
+            if (DataContext is not MainWindowViewModel vm)
+                return;
+
+            try
+            {
+                var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+                {
+                    Title = "Select a tile image",
+                    AllowMultiple = false,
+                    FileTypeFilter = new[]
+                    {
+                        new FilePickerFileType("Image files")
+                        {
+                            Patterns = new[] { "*.png", "*.jpg", "*.jpeg", "*.webp", "*.bmp" },
+                            MimeTypes = new[] { "image/png", "image/jpeg", "image/webp", "image/bmp" }
+                        }
+                    }
+                });
+
+                if (files.Count == 0)
+                    return;
+
+                var selected = files[0];
+                var imagePath = selected.Path.IsFile ? selected.Path.LocalPath : selected.Name;
+                vm.SetPendingAiSearchImage(imagePath);
+            }
+            catch (Exception ex)
+            {
+                vm.SetAiSearchImageSelectionError(ex.Message);
             }
         }
 

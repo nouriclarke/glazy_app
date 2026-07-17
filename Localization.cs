@@ -13,13 +13,16 @@ public static class Localization
 
 public class L10n : IValueConverter
 {
-    public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
+    public object? Convert(object? value, Type targetType, object? parameter, CultureInfo culture)
     {
-        return Localization.Resources.GetString(parameter.ToString(), culture)
-               ?? parameter.ToString();
+        var key = parameter?.ToString();
+        if (string.IsNullOrWhiteSpace(key))
+            return string.Empty;
+
+        return Localization.Resources.GetString(key, culture) ?? key;
     }
 
-    public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
+    public object? ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture)
     {
         throw new NotImplementedException();
     }

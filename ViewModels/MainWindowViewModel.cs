@@ -7,8 +7,16 @@ using ColorMine.ColorSpaces;
 using ColorMine.ColorSpaces.Comparisons;
 using Avalonia.Media;
 using System.Collections.Generic;
+using System.Diagnostics;
+using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Text.Json;
+using System.Text.Json.Serialization;
+using System.Text.RegularExpressions;
+using System.Windows.Input;
+// using System.Diagnostics;
+// using Microsoft.VisualBasic.FileIO;
 
 namespace ASTEM_DB.ViewModels
 {
@@ -208,9 +216,28 @@ namespace ASTEM_DB.ViewModels
         // --- Existing glaze search ---
 
         private CancellationTokenSource? _searchCts;
+        private CancellationTokenSource? _aiSearchCts;
+
+        public ICommand SearchCommand { get; }
+        public ICommand AiSearchCommand { get; }
+        public ICommand ResetAiConversationCommand { get; }
+        public ICommand MarkAiGoodCommand { get; }
+        public ICommand MarkAiBadCommand { get; }
+        public ICommand MarkAiWrongColorCommand { get; }
+        public ICommand MarkAiHasDarkEdgesCommand { get; }
+        public ICommand TrainAiRankingCommand { get; }
 
         public MainWindowViewModel()
         {
+            SearchCommand = new AsyncCommand(ExecuteSearchCommandAsync);
+            AiSearchCommand = new AsyncCommand(ExecuteAiSearchCommandAsync);
+            ResetAiConversationCommand = new RelayCommand(ResetAiConversation);
+            MarkAiGoodCommand = new AsyncCommand(() => SaveSelectedAiFeedbackAsync("good", "good_match"));
+            MarkAiBadCommand = new AsyncCommand(() => SaveSelectedAiFeedbackAsync("bad", "bad_match"));
+            MarkAiWrongColorCommand = new AsyncCommand(() => SaveSelectedAiFeedbackAsync("bad", "wrong_color"));
+            MarkAiHasDarkEdgesCommand = new AsyncCommand(() => SaveSelectedAiFeedbackAsync("bad", "has_dark_edges"));
+            TrainAiRankingCommand = new AsyncCommand(TrainAiRankingAsync);
+
             LoadData();
             Red = 185;
             Green = 145;
@@ -218,7 +245,7 @@ namespace ASTEM_DB.ViewModels
             labConversion();
         }
 
-        public async void SearchCommand()
+        private async Task ExecuteSearchCommandAsync()
         {
             _searchCts?.Cancel();
             _searchCts = new CancellationTokenSource();
@@ -227,6 +254,792 @@ namespace ASTEM_DB.ViewModels
                 await FilterCardItemsAsync(_searchCts.Token);
             }
             catch (OperationCanceledException) { }
+        }
+
+        private string _aiSearchPrompt = string.Empty;
+        public string AiSearchPrompt
+        {
+            get => _aiSearchPrompt;
+            set => this.RaiseAndSetIfChanged(ref _aiSearchPrompt, value);
+        }
+
+        private string _aiSearchStatus = "AI search ready.";
+        public string AiSearchStatus
+        {
+            get => _aiSearchStatus;
+            set => this.RaiseAndSetIfChanged(ref _aiSearchStatus, value);
+        }
+
+        private string _aiResolvedSearchPrompt = string.Empty;
+        public string AiResolvedSearchPrompt
+        {
+            get => _aiResolvedSearchPrompt;
+            set => this.RaiseAndSetIfChanged(ref _aiResolvedSearchPrompt, value);
+        }
+
+        private string _aiSearchImagePath = string.Empty;
+        public string AiSearchImagePath
+        {
+            get => _aiSearchImagePath;
+            set => this.RaiseAndSetIfChanged(ref _aiSearchImagePath, value);
+        }
+
+        private string _aiSearchImageLabel = string.Empty;
+        public string AiSearchImageLabel
+        {
+            get => _aiSearchImageLabel;
+            set => this.RaiseAndSetIfChanged(ref _aiSearchImageLabel, value);
+        }
+
+        private bool _isAiSearchLoading;
+        public bool IsAiSearchLoading
+        {
+            get => _isAiSearchLoading;
+            set => this.RaiseAndSetIfChanged(ref _isAiSearchLoading, value);
+        }
+
+        public ObservableCollection<AiChatMessageViewModel> AiChatMessages { get; } = new();
+
+        private readonly List<string> _aiConversationColors = new();
+        private readonly List<string> _aiConversationModifiers = new();
+        private readonly List<string> _aiConversationFreeTerms = new();
+        private readonly List<string> _aiConversationConstraints = new();
+
+        private string _aiTrainingStatus = "Select an AI result to label it.";
+        public string AiTrainingStatus
+        {
+            get => _aiTrainingStatus;
+            set => this.RaiseAndSetIfChanged(ref _aiTrainingStatus, value);
+        }
+
+        private async Task ExecuteAiSearchCommandAsync()
+        {
+            var prompt = AiSearchPrompt?.Trim();
+            if (string.IsNullOrWhiteSpace(prompt))
+            {
+                AiSearchStatus = string.IsNullOrWhiteSpace(AiSearchImagePath)
+                    ? "Enter an AI search message first."
+                    : "Image selected. The visual image-search ranking pipeline is not connected yet.";
+                return;
+            }
+
+            _aiSearchCts?.Cancel();
+            _aiSearchCts = new CancellationTokenSource();
+            var cancellationToken = _aiSearchCts.Token;
+            var resolvedPrompt = ResolveAiConversationPrompt(prompt);
+
+            AiChatMessages.Add(new AiChatMessageViewModel("You", prompt));
+            AiSearchPrompt = string.Empty;
+            AiResolvedSearchPrompt = resolvedPrompt;
+
+            try
+            {
+                IsAiSearchLoading = true;
+                AiSearchStatus = $"Searching for: {resolvedPrompt}";
+
+                var response = await RunLocalAiSearchAsync(resolvedPrompt, cancellationToken);
+                cancellationToken.ThrowIfCancellationRequested();
+                var idToScore = response.Results.ToDictionary(result => result.Id, result => result.FinalScore);
+                var items = await _db.GetCardItemsByIdsAsync(response.Results.Select(result => result.Id));
+                cancellationToken.ThrowIfCancellationRequested();
+
+                CardItems.Clear();
+                SelectedCard = null;
+                IsSidebarVisible = false;
+
+                foreach (var item in items)
+                {
+                    if (idToScore.TryGetValue(item.Id, out var score))
+                    {
+                        var matchScore = response.Results.FirstOrDefault(result => result.Id == item.Id)?.MatchScore ?? 0;
+                        item.AiScore = matchScore > 0 ? matchScore : score;
+                    }
+
+                    if (response.Results.FirstOrDefault(result => result.Id == item.Id) is { } aiResult)
+                    {
+                        item.AiClipScore = aiResult.ClipScore;
+                        item.AiColorScore = aiResult.ColorScore;
+                        item.AiMetadataScore = aiResult.MetadataScore;
+                        item.AiVisualScore = aiResult.VisualScore;
+                        item.AiVisualPenalty = aiResult.VisualPenalty;
+                        item.AiExclusionPenalty = aiResult.Features?.ExclusionPenalty ?? 0;
+                        item.AiFeedbackStatus = string.Empty;
+                    }
+
+                    var lab = new Lab { L = item.ColorL, A = item.ColorA, B = item.ColorB };
+                    item.ColorName = GetColorName(lab);
+                    CardItems.Add(item);
+                }
+
+                IsFilterEmpty = CardItems.Count == 0;
+                AiSearchStatus = CardItems.Count == 0
+                    ? "No AI matches found in the local database."
+                    : $"Showing top {CardItems.Count} local AI matches from {response.SearchedRows} database tiles.";
+                AiChatMessages.Add(new AiChatMessageViewModel(
+                    "Glazy",
+                    CardItems.Count == 0
+                        ? $"No matches found for \"{resolvedPrompt}\"."
+                        : $"Showing {CardItems.Count} matches for \"{resolvedPrompt}\"."
+                ));
+            }
+            catch (OperationCanceledException)
+            {
+                AiSearchStatus = "AI search was canceled.";
+            }
+            catch (Exception ex)
+            {
+                AiSearchStatus = $"AI search failed: {ex.Message}";
+                AiChatMessages.Add(new AiChatMessageViewModel("Glazy", AiSearchStatus));
+            }
+            finally
+            {
+                IsAiSearchLoading = false;
+            }
+        }
+
+        public void SetPendingAiSearchImage(string imagePath)
+        {
+            if (string.IsNullOrWhiteSpace(imagePath))
+                return;
+
+            var fileName = Path.GetFileName(imagePath);
+            AiSearchImagePath = imagePath;
+            AiSearchImageLabel = $"Image: {fileName}";
+            AiSearchStatus = "Image selected. The visual image-search ranking pipeline is not connected yet.";
+            AiChatMessages.Add(new AiChatMessageViewModel("You", $"Image: {fileName}"));
+        }
+
+        public void SetAiSearchImageSelectionError(string message)
+        {
+            AiSearchStatus = $"Image selection failed: {CleanProcessMessage(message)}";
+        }
+
+        private void ResetAiConversation()
+        {
+            _aiSearchCts?.Cancel();
+            _aiConversationColors.Clear();
+            _aiConversationModifiers.Clear();
+            _aiConversationFreeTerms.Clear();
+            _aiConversationConstraints.Clear();
+            AiChatMessages.Clear();
+            AiResolvedSearchPrompt = string.Empty;
+            AiSearchImagePath = string.Empty;
+            AiSearchImageLabel = string.Empty;
+            AiSearchPrompt = string.Empty;
+            AiSearchStatus = "AI search reset.";
+        }
+
+        private async Task SaveSelectedAiFeedbackAsync(string label, string reason)
+        {
+            if (SelectedCard == null)
+            {
+                AiTrainingStatus = "Select a tile result before labeling it.";
+                return;
+            }
+
+            if (string.IsNullOrWhiteSpace(AiResolvedSearchPrompt))
+            {
+                AiTrainingStatus = "Run an AI search before saving training feedback.";
+                return;
+            }
+
+            var prototypeDir = FindAiPrototypeDirectory();
+            var trainingDir = Path.Combine(prototypeDir, "training-data");
+            Directory.CreateDirectory(trainingDir);
+
+            var feedback = new AiFeedbackEntry
+            {
+                Timestamp = DateTimeOffset.UtcNow,
+                Prompt = AiResolvedSearchPrompt,
+                TileId = SelectedCard.Id,
+                Label = label,
+                Reason = reason,
+                FinalScore = SelectedCard.AiScore,
+                ColorName = SelectedCard.ColorName,
+                AutoTags = SelectedCard.AutoTags,
+                Features = new AiTrainingFeatures
+                {
+                    Bias = 1,
+                    ClipScore = SelectedCard.AiClipScore,
+                    ColorScore = SelectedCard.AiColorScore,
+                    MetadataScore = SelectedCard.AiMetadataScore,
+                    VisualScore = SelectedCard.AiVisualScore,
+                    VisualPenalty = SelectedCard.AiVisualPenalty,
+                    ExclusionPenalty = SelectedCard.AiExclusionPenalty
+                }
+            };
+
+            var feedbackPath = Path.Combine(trainingDir, "feedback.jsonl");
+            var line = JsonSerializer.Serialize(feedback) + Environment.NewLine;
+            await File.AppendAllTextAsync(feedbackPath, line);
+
+            var labelText = reason switch
+            {
+                "good_match" => "Good match saved",
+                "wrong_color" => "Wrong color saved",
+                "has_dark_edges" => "Dark edge issue saved",
+                _ => "Bad match saved"
+            };
+            SelectedCard.AiFeedbackStatus = labelText;
+            AiTrainingStatus = $"{labelText}. Run Train Weights when you are ready.";
+        }
+
+        private async Task TrainAiRankingAsync()
+        {
+            var prototypeDir = FindAiPrototypeDirectory();
+            var nodePath = FindNodeExecutable();
+            var existingPath = Environment.GetEnvironmentVariable("PATH") ?? string.Empty;
+            var startInfo = new ProcessStartInfo
+            {
+                FileName = nodePath,
+                WorkingDirectory = prototypeDir,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false,
+                CreateNoWindow = true
+            };
+
+            startInfo.ArgumentList.Add("train-ranker.mjs");
+            startInfo.Environment["PATH"] = $"/usr/local/bin:/opt/homebrew/bin:{existingPath}";
+            startInfo.Environment["ALLOW_REMOTE"] = Environment.GetEnvironmentVariable("ALLOW_REMOTE") ?? "1";
+            startInfo.Environment["CLIP_MODEL"] = Environment.GetEnvironmentVariable("CLIP_MODEL") ?? "Xenova/clip-vit-base-patch16";
+            startInfo.Environment["DB_HOST"] = HostDatabaseValue("DB_HOST", "127.0.0.1");
+            startInfo.Environment["DB_PORT"] = Environment.GetEnvironmentVariable("DB_PORT") ?? "3306";
+            startInfo.Environment["DB_NAME"] = Environment.GetEnvironmentVariable("DB_NAME")
+                ?? Environment.GetEnvironmentVariable("MYSQL_DATABASE")
+                ?? "tilearchive";
+            startInfo.Environment["DB_USER"] = Environment.GetEnvironmentVariable("DB_USER") ?? "ceramadmin";
+            startInfo.Environment["DB_PASSWORD"] = Environment.GetEnvironmentVariable("DB_PASSWORD") ?? "glazed-dev-password";
+
+            AiTrainingStatus = "Training ranking weights...";
+
+            using var process = Process.Start(startInfo)
+                ?? throw new InvalidOperationException("Could not start the AI ranking trainer.");
+
+            var stdoutTask = process.StandardOutput.ReadToEndAsync();
+            var stderrTask = process.StandardError.ReadToEndAsync();
+            await process.WaitForExitAsync();
+            var stdout = await stdoutTask;
+            var stderr = await stderrTask;
+
+            if (process.ExitCode != 0)
+            {
+                var message = string.IsNullOrWhiteSpace(stderr) ? stdout : stderr;
+                AiTrainingStatus = $"Training failed: {CleanProcessMessage(message)}";
+                return;
+            }
+
+            var response = JsonSerializer.Deserialize<AiTrainingResponse>(
+                ExtractJsonPayload(stdout),
+                new JsonSerializerOptions { PropertyNameCaseInsensitive = true }
+            );
+
+            _aiSearchWorker?.Dispose();
+            _aiSearchWorker = null;
+
+            var examples = response?.Metrics?.Examples ?? 0;
+            var accuracy = response?.Metrics?.Accuracy ?? 0;
+            AiTrainingStatus = $"Training complete: {examples} examples, {accuracy:P0} fit.";
+        }
+
+        private string ResolveAiConversationPrompt(string latestPrompt)
+        {
+            CaptureNegativeConstraints(latestPrompt);
+            var positivePrompt = RemoveNegativeConstraintPhrases(latestPrompt);
+            var tokens = TokenizePrompt(positivePrompt);
+            var explicitColors = tokens
+                .Select(token => AiColorAliases.TryGetValue(token, out var color) ? color : null)
+                .Where(color => color != null)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .Cast<string>()
+                .ToList();
+
+            if (explicitColors.Count > 0)
+            {
+                _aiConversationColors.Clear();
+                foreach (var color in explicitColors)
+                    AddUnique(_aiConversationColors, color);
+            }
+
+            ApplyPromptModifiers(tokens);
+            ApplyFreeTerms(tokens);
+
+            var terms = new List<string>();
+            terms.AddRange(_aiConversationModifiers);
+            terms.AddRange(_aiConversationColors);
+            terms.AddRange(_aiConversationFreeTerms);
+            terms.AddRange(_aiConversationConstraints);
+            terms.Add("ceramic");
+            terms.Add("tile");
+
+            return string.Join(" ", terms.Distinct(StringComparer.OrdinalIgnoreCase));
+        }
+
+        private void CaptureNegativeConstraints(string prompt)
+        {
+            foreach (Match match in EdgeColorConstraintRegex.Matches(prompt))
+            {
+                var color = match.Groups["color"].Value.ToLowerInvariant();
+                if (color is "black" or "brown")
+                    AddUnique(_aiConversationConstraints, $"no {color} edges");
+                else
+                    AddUnique(_aiConversationConstraints, "no dark edges");
+            }
+
+            if (NoEdgeConstraintRegex.IsMatch(prompt))
+                AddUnique(_aiConversationConstraints, "no edges");
+        }
+
+        private static string RemoveNegativeConstraintPhrases(string prompt)
+        {
+            var cleaned = EdgeColorConstraintRegex.Replace(prompt, " ");
+            cleaned = NoEdgeConstraintRegex.Replace(cleaned, " ");
+            return cleaned;
+        }
+
+        private void ApplyPromptModifiers(IReadOnlySet<string> tokens)
+        {
+            if (HasAny(tokens, "dark", "deep"))
+                SetExclusiveModifier("dark", "light", "lighter", "bright", "brighter", "pale");
+
+            if (HasAny(tokens, "darker", "deeper"))
+                SetExclusiveModifier("darker", "light", "lighter", "bright", "brighter", "pale");
+
+            if (HasAny(tokens, "light", "bright", "pale"))
+                SetExclusiveModifier("light", "dark", "darker", "deep", "deeper");
+
+            if (HasAny(tokens, "lighter", "brighter"))
+                SetExclusiveModifier("lighter", "dark", "darker", "deep", "deeper");
+
+            if (HasAny(tokens, "warm", "warmer"))
+                SetExclusiveModifier("warm", "cool", "cold");
+
+            if (HasAny(tokens, "cool", "colder", "cold"))
+                SetExclusiveModifier("cool", "warm");
+
+            if (HasAny(tokens, "glossy", "glossier", "shiny", "shine", "reflective"))
+                SetExclusiveModifier("glossy", "matte", "dull");
+
+            if (HasAny(tokens, "matte", "dull"))
+                SetExclusiveModifier("matte", "glossy", "shiny", "reflective");
+
+            if (HasAny(tokens, "rough", "texture", "textured", "speckled", "spotted", "spotty", "variegated"))
+                SetExclusiveModifier("textured", "smooth");
+
+            if (HasAny(tokens, "smooth"))
+                SetExclusiveModifier("smooth", "rough", "textured", "speckled", "variegated");
+
+            if (HasAny(tokens, "earth", "earthy", "rustic"))
+                AddUnique(_aiConversationModifiers, "earthy");
+        }
+
+        private void ApplyFreeTerms(IReadOnlySet<string> tokens)
+        {
+            foreach (var token in tokens)
+            {
+                if (AiStopWords.Contains(token) ||
+                    AiColorAliases.ContainsKey(token) ||
+                    AiModifierTokens.Contains(token))
+                    continue;
+
+                AddUnique(_aiConversationFreeTerms, token);
+            }
+
+            while (_aiConversationFreeTerms.Count > 6)
+                _aiConversationFreeTerms.RemoveAt(0);
+        }
+
+        private void SetExclusiveModifier(string modifier, params string[] remove)
+        {
+            _aiConversationModifiers.RemoveAll(term =>
+                remove.Any(value => string.Equals(value, term, StringComparison.OrdinalIgnoreCase)));
+            AddUnique(_aiConversationModifiers, modifier);
+        }
+
+        private static bool HasAny(IReadOnlySet<string> tokens, params string[] values)
+            => values.Any(tokens.Contains);
+
+        private static void AddUnique(List<string> values, string value)
+        {
+            if (!values.Contains(value, StringComparer.OrdinalIgnoreCase))
+                values.Add(value);
+        }
+
+        private static IReadOnlySet<string> TokenizePrompt(string prompt)
+            => prompt
+                .ToLowerInvariant()
+                .Split(new[] { ' ', '\t', '\r', '\n', ',', '.', ';', ':', '!', '?', '\'', '"', '-', '_', '/', '\\', '(', ')', '[', ']' },
+                    StringSplitOptions.RemoveEmptyEntries)
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        private static readonly Dictionary<string, string> AiColorAliases = new(StringComparer.OrdinalIgnoreCase)
+        {
+            { "black", "black" },
+            { "white", "white" },
+            { "cream", "cream" },
+            { "beige", "cream" },
+            { "tan", "brown" },
+            { "brown", "brown" },
+            { "red", "red" },
+            { "burgundy", "red" },
+            { "maroon", "red" },
+            { "orange", "orange" },
+            { "yellow", "yellow" },
+            { "gold", "yellow" },
+            { "green", "green" },
+            { "blue", "blue" },
+            { "navy", "blue" },
+            { "cyan", "cyan" },
+            { "teal", "cyan" },
+            { "turquoise", "cyan" },
+            { "purple", "purple" },
+            { "violet", "purple" },
+            { "pink", "pink" },
+            { "gray", "gray" },
+            { "grey", "gray" }
+        };
+
+        private static readonly HashSet<string> AiStopWords = new(StringComparer.OrdinalIgnoreCase)
+        {
+            "a", "an", "and", "are", "can", "could", "for", "give", "i", "it", "like", "make",
+            "me", "more", "now", "of", "one", "ones", "please", "search", "show", "something",
+            "that", "the", "thing", "things", "tile", "tiles", "to", "want", "with",
+            "edge", "edges", "border", "borders", "rim", "rims", "frame", "outline"
+        };
+
+        private static readonly HashSet<string> AiModifierTokens = new(StringComparer.OrdinalIgnoreCase)
+        {
+            "dark", "darker", "deep", "deeper", "light", "lighter", "bright", "brighter", "pale",
+            "warm", "warmer", "cool", "colder", "cold", "glossy", "glossier", "shiny", "shine",
+            "reflective", "matte", "dull", "rough", "texture", "textured", "speckled", "spotted",
+            "spotty", "variegated", "smooth", "earth", "earthy", "rustic"
+        };
+
+        private static readonly Regex EdgeColorConstraintRegex = new(
+            @"\b(?:no|without|avoid|not)\s+(?<color>dark|black|brown)\s+(?:edge|edges|border|borders|rim|rims|frame|outline)\b",
+            RegexOptions.IgnoreCase | RegexOptions.Compiled
+        );
+
+        private static readonly Regex NoEdgeConstraintRegex = new(
+            @"\b(?:no|without|avoid)\s+(?:edge|edges|border|borders|rim|rims|frame|outline)\b",
+            RegexOptions.IgnoreCase | RegexOptions.Compiled
+        );
+
+        private static AiSearchWorkerClient? _aiSearchWorker;
+
+        private static async Task<AiSearchResponse> RunLocalAiSearchAsync(string prompt, CancellationToken cancellationToken)
+        {
+            var prototypeDir = FindAiPrototypeDirectory();
+            var nodePath = FindNodeExecutable();
+
+            if (!string.Equals(Environment.GetEnvironmentVariable("AI_SEARCH_WORKER"), "0", StringComparison.OrdinalIgnoreCase))
+            {
+                try
+                {
+                    _aiSearchWorker ??= new AiSearchWorkerClient(CreateAiSearchStartInfo(prototypeDir, nodePath, useWorker: true));
+                    return await _aiSearchWorker.SearchAsync(prompt, cancellationToken);
+                }
+                catch (OperationCanceledException)
+                {
+                    _aiSearchWorker?.Dispose();
+                    _aiSearchWorker = null;
+                    throw;
+                }
+                catch (Exception ex)
+                {
+                    Debug.WriteLine($"AI worker failed, falling back to one-shot search: {ex}");
+                    _aiSearchWorker?.Dispose();
+                    _aiSearchWorker = null;
+                }
+            }
+
+            return await RunLocalAiSearchOnceAsync(prompt, prototypeDir, nodePath, cancellationToken);
+        }
+
+        private static async Task<AiSearchResponse> RunLocalAiSearchOnceAsync(
+            string prompt,
+            string prototypeDir,
+            string nodePath,
+            CancellationToken cancellationToken)
+        {
+            var startInfo = CreateAiSearchStartInfo(prototypeDir, nodePath, useWorker: false);
+            startInfo.ArgumentList.Add(prompt);
+
+            using var process = Process.Start(startInfo)
+                ?? throw new InvalidOperationException("Could not start the local AI search process.");
+
+            var stdoutTask = process.StandardOutput.ReadToEndAsync();
+            var stderrTask = process.StandardError.ReadToEndAsync();
+
+            await process.WaitForExitAsync(cancellationToken);
+            var stdout = await stdoutTask;
+            var stderr = await stderrTask;
+
+            if (process.ExitCode != 0)
+            {
+                var message = string.IsNullOrWhiteSpace(stderr) ? stdout : stderr;
+                throw new InvalidOperationException(CleanProcessMessage(message));
+            }
+
+            return DeserializeAiSearchResponse(ExtractJsonPayload(stdout));
+        }
+
+        private static ProcessStartInfo CreateAiSearchStartInfo(string prototypeDir, string nodePath, bool useWorker)
+        {
+            var existingPath = Environment.GetEnvironmentVariable("PATH") ?? string.Empty;
+            var startInfo = new ProcessStartInfo
+            {
+                FileName = nodePath,
+                WorkingDirectory = prototypeDir,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false,
+                CreateNoWindow = true
+            };
+
+            startInfo.ArgumentList.Add("search.mjs");
+            if (useWorker)
+                startInfo.ArgumentList.Add("--stdio");
+
+            startInfo.Environment["PATH"] = $"/usr/local/bin:/opt/homebrew/bin:{existingPath}";
+            startInfo.Environment["ALLOW_REMOTE"] = Environment.GetEnvironmentVariable("ALLOW_REMOTE") ?? "1";
+            startInfo.Environment["CLIP_MODEL"] = Environment.GetEnvironmentVariable("CLIP_MODEL") ?? "Xenova/clip-vit-base-patch16";
+            startInfo.Environment["DB_HOST"] = HostDatabaseValue("DB_HOST", "127.0.0.1");
+            startInfo.Environment["DB_PORT"] = Environment.GetEnvironmentVariable("DB_PORT") ?? "3306";
+            startInfo.Environment["DB_NAME"] = Environment.GetEnvironmentVariable("DB_NAME")
+                ?? Environment.GetEnvironmentVariable("MYSQL_DATABASE")
+                ?? "tilearchive";
+            startInfo.Environment["DB_USER"] = Environment.GetEnvironmentVariable("DB_USER") ?? "ceramadmin";
+            startInfo.Environment["DB_PASSWORD"] = Environment.GetEnvironmentVariable("DB_PASSWORD") ?? "glazed-dev-password";
+            startInfo.Environment["TOP_K"] = Environment.GetEnvironmentVariable("TOP_K") ?? "10";
+            startInfo.Environment["EMBEDDING_PREFILTER"] = Environment.GetEnvironmentVariable("EMBEDDING_PREFILTER") ?? "60";
+
+            return startInfo;
+        }
+
+        private static string FindAiPrototypeDirectory()
+        {
+            var directCandidates = new[]
+            {
+                Path.Combine(AppContext.BaseDirectory, "ai-search-prototype", "search.mjs"),
+                Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "ai-search-prototype", "search.mjs")),
+                Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "ai-search-prototype", "search.mjs")),
+                Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "ai-search-prototype", "search.mjs")),
+                Path.Combine(Directory.GetCurrentDirectory(), "ai-search-prototype", "search.mjs"),
+                Path.GetFullPath(Path.Combine(Directory.GetCurrentDirectory(), "..", "ai-search-prototype", "search.mjs")),
+            };
+
+            foreach (var candidate in directCandidates)
+            {
+                if (File.Exists(candidate))
+                    return Path.GetDirectoryName(candidate)!;
+            }
+
+            var current = new DirectoryInfo(AppContext.BaseDirectory);
+            while (current != null)
+            {
+                var candidate = Path.Combine(current.FullName, "ai-search-prototype", "search.mjs");
+                if (File.Exists(candidate))
+                    return Path.GetDirectoryName(candidate)!;
+
+                current = current.Parent;
+            }
+
+            throw new DirectoryNotFoundException("Could not find ai-search-prototype/search.mjs near the app.");
+        }
+
+        private static string HostDatabaseValue(string name, string fallback)
+        {
+            var value = Environment.GetEnvironmentVariable(name) ?? fallback;
+            return value == "tile-db" ? "127.0.0.1" : value;
+        }
+
+        private static string ExtractJsonPayload(string stdout)
+        {
+            var trimmed = stdout.Trim();
+            if (trimmed.StartsWith("{") && trimmed.EndsWith("}"))
+                return trimmed;
+
+            var lines = trimmed
+                .Split(new[] { "\r\n", "\n" }, StringSplitOptions.RemoveEmptyEntries)
+                .Reverse();
+
+            foreach (var line in lines)
+            {
+                var candidate = line.Trim();
+                if (candidate.StartsWith("{") && candidate.EndsWith("}"))
+                    return candidate;
+            }
+
+            throw new InvalidOperationException(
+                "Local AI search did not return JSON. Output: " + CleanProcessMessage(stdout)
+            );
+        }
+
+        private static AiSearchResponse DeserializeAiSearchResponse(string json)
+        {
+            using var document = JsonDocument.Parse(json);
+            if (document.RootElement.TryGetProperty("error", out var error))
+            {
+                var details = document.RootElement.TryGetProperty("details", out var detailValue)
+                    ? detailValue.GetString()
+                    : null;
+                var message = string.Join(
+                    " ",
+                    new[] { error.GetString(), details }
+                        .Where(value => !string.IsNullOrWhiteSpace(value))
+                );
+                throw new InvalidOperationException(CleanProcessMessage(message));
+            }
+
+            var response = JsonSerializer.Deserialize<AiSearchResponse>(
+                json,
+                new JsonSerializerOptions { PropertyNameCaseInsensitive = true }
+            );
+
+            return response ?? throw new InvalidOperationException("Local AI search returned an empty response.");
+        }
+
+        private static string CleanProcessMessage(string message)
+        {
+            var lines = message
+                .Split(new[] { "\r\n", "\n" }, StringSplitOptions.RemoveEmptyEntries)
+                .Select(line => line.Trim())
+                .Where(line => !string.IsNullOrWhiteSpace(line))
+                .Take(8);
+
+            var cleaned = string.Join(" ", lines).Trim();
+            return string.IsNullOrWhiteSpace(cleaned) ? "Unknown local AI search error." : cleaned;
+        }
+
+        private sealed class AiSearchWorkerClient : IDisposable
+        {
+            private readonly ProcessStartInfo _startInfo;
+            private readonly SemaphoreSlim _gate = new(1, 1);
+            private readonly List<string> _stderrLines = new();
+            private Process? _process;
+
+            public AiSearchWorkerClient(ProcessStartInfo startInfo)
+            {
+                _startInfo = startInfo;
+            }
+
+            public async Task<AiSearchResponse> SearchAsync(string prompt, CancellationToken cancellationToken)
+            {
+                await _gate.WaitAsync(cancellationToken);
+                try
+                {
+                    var process = EnsureStarted();
+                    var request = JsonSerializer.Serialize(new AiSearchWorkerRequest { Query = prompt });
+
+                    try
+                    {
+                        await process.StandardInput.WriteLineAsync(request).WaitAsync(cancellationToken);
+                        await process.StandardInput.FlushAsync().WaitAsync(cancellationToken);
+
+                        while (true)
+                        {
+                            var line = await process.StandardOutput.ReadLineAsync().WaitAsync(cancellationToken);
+                            if (line == null)
+                                throw new InvalidOperationException("Local AI search worker exited. " + RecentStderr());
+
+                            var candidate = line.Trim();
+                            if (!candidate.StartsWith("{") || !candidate.EndsWith("}"))
+                                continue;
+
+                            return DeserializeAiSearchResponse(candidate);
+                        }
+                    }
+                    catch (OperationCanceledException)
+                    {
+                        StopProcess();
+                        throw;
+                    }
+                    catch (Exception)
+                    {
+                        StopProcess();
+                        throw;
+                    }
+                }
+                finally
+                {
+                    _gate.Release();
+                }
+            }
+
+            private Process EnsureStarted()
+            {
+                if (_process != null && !_process.HasExited)
+                    return _process;
+
+                _stderrLines.Clear();
+                _process = Process.Start(_startInfo)
+                    ?? throw new InvalidOperationException("Could not start the local AI search worker.");
+                _ = Task.Run(() => DrainStderrAsync(_process));
+                return _process;
+            }
+
+            private async Task DrainStderrAsync(Process process)
+            {
+                try
+                {
+                    while (!process.StandardError.EndOfStream)
+                    {
+                        var line = await process.StandardError.ReadLineAsync();
+                        if (string.IsNullOrWhiteSpace(line))
+                            continue;
+
+                        lock (_stderrLines)
+                        {
+                            _stderrLines.Add(line);
+                            while (_stderrLines.Count > 8)
+                                _stderrLines.RemoveAt(0);
+                        }
+                    }
+                }
+                catch (InvalidOperationException)
+                {
+                }
+            }
+
+            private string RecentStderr()
+            {
+                lock (_stderrLines)
+                    return CleanProcessMessage(string.Join(Environment.NewLine, _stderrLines));
+            }
+
+            private void StopProcess()
+            {
+                try
+                {
+                    if (_process != null && !_process.HasExited)
+                        _process.Kill(entireProcessTree: true);
+                }
+                catch (InvalidOperationException)
+                {
+                }
+
+                _process?.Dispose();
+                _process = null;
+            }
+
+            public void Dispose()
+            {
+                StopProcess();
+                _gate.Dispose();
+            }
+        }
+
+        private static string FindNodeExecutable()
+        {
+            var candidates = new[]
+            {
+                "/usr/local/bin/node",
+                "/opt/homebrew/bin/node",
+                "node"
+            };
+
+            return candidates.First(candidate => candidate == "node" || File.Exists(candidate));
         }
 
         private bool _isFilterEmpty;
@@ -240,7 +1053,15 @@ namespace ASTEM_DB.ViewModels
         public bool FilterByString
         {
             get => _filterByString;
-            set => this.RaiseAndSetIfChanged(ref _filterByString, value);
+            set
+            {
+                this.RaiseAndSetIfChanged(ref _filterByString, value);
+                if (value)
+                {
+                    FilterByColor = false;
+                    DontFilterByColor = false;
+                }
+            }
         }
 
         private async Task FilterCardItemsAsync(CancellationToken cancellationToken)
@@ -276,7 +1097,10 @@ namespace ASTEM_DB.ViewModels
             foreach (var item in filtered)
             {
                 cancellationToken.ThrowIfCancellationRequested();
-                item.Image = await _db.GetImageByIdAsync(item.Id);
+
+                var image = await _db.GetImageByIdAsync(item.Id);
+                if (image != null)
+                    item.Image = image;
                 CardItems.Add(item);
             }
         }
@@ -317,6 +1141,11 @@ namespace ASTEM_DB.ViewModels
             SelectedSurfaceCondition = "All";
             SelectedFiringType = "All";
             SelectedColorPalette = "Red";
+            FilterByColor = false;
+            FilterByString = false;
+            DontFilterByColor = true;
+
+            await ExecuteSearchCommandAsync();
         }
 
         private void labConversion()
@@ -332,7 +1161,30 @@ namespace ASTEM_DB.ViewModels
         public bool FilterByColor
         {
             get => _filterByColor;
-            set => this.RaiseAndSetIfChanged(ref _filterByColor, value);
+            set
+            {
+                this.RaiseAndSetIfChanged(ref _filterByColor, value);
+                if (value)
+                {
+                    FilterByString = false;
+                    DontFilterByColor = false;
+                }
+            }
+        }
+
+        private bool _dontFilterByColor;
+        public bool DontFilterByColor
+        {
+            get => _dontFilterByColor;
+            set
+            {
+                this.RaiseAndSetIfChanged(ref _dontFilterByColor, value);
+                if (value)
+                {
+                    FilterByColor = false;
+                    FilterByString = false;
+                }
+            }
         }
 
         private Color _selectedColor;
@@ -391,6 +1243,120 @@ namespace ASTEM_DB.ViewModels
                 }
             }
             return minDeltaE <= 30 ? colorName : "Other";
+        }
+
+        private sealed class AiSearchResponse
+        {
+            [JsonPropertyName("searchedRows")]
+            public int SearchedRows { get; set; }
+
+            [JsonPropertyName("results")]
+            public List<AiSearchResult> Results { get; set; } = new();
+        }
+
+        private sealed class AiFeedbackEntry
+        {
+            [JsonPropertyName("timestamp")]
+            public DateTimeOffset Timestamp { get; set; }
+
+            [JsonPropertyName("prompt")]
+            public string Prompt { get; set; } = string.Empty;
+
+            [JsonPropertyName("tileId")]
+            public string TileId { get; set; } = string.Empty;
+
+            [JsonPropertyName("label")]
+            public string Label { get; set; } = string.Empty;
+
+            [JsonPropertyName("reason")]
+            public string Reason { get; set; } = string.Empty;
+
+            [JsonPropertyName("finalScore")]
+            public double FinalScore { get; set; }
+
+            [JsonPropertyName("colorName")]
+            public string ColorName { get; set; } = string.Empty;
+
+            [JsonPropertyName("autoTags")]
+            public string AutoTags { get; set; } = string.Empty;
+
+            [JsonPropertyName("features")]
+            public AiTrainingFeatures Features { get; set; } = new();
+        }
+
+        private sealed class AiTrainingFeatures
+        {
+            [JsonPropertyName("bias")]
+            public double Bias { get; set; }
+
+            [JsonPropertyName("clipScore")]
+            public double ClipScore { get; set; }
+
+            [JsonPropertyName("colorScore")]
+            public double ColorScore { get; set; }
+
+            [JsonPropertyName("metadataScore")]
+            public double MetadataScore { get; set; }
+
+            [JsonPropertyName("visualScore")]
+            public double VisualScore { get; set; }
+
+            [JsonPropertyName("visualPenalty")]
+            public double VisualPenalty { get; set; }
+
+            [JsonPropertyName("exclusionPenalty")]
+            public double ExclusionPenalty { get; set; }
+        }
+
+        private sealed class AiTrainingResponse
+        {
+            [JsonPropertyName("metrics")]
+            public AiTrainingMetrics? Metrics { get; set; }
+        }
+
+        private sealed class AiTrainingMetrics
+        {
+            [JsonPropertyName("examples")]
+            public int Examples { get; set; }
+
+            [JsonPropertyName("accuracy")]
+            public double Accuracy { get; set; }
+        }
+
+        private sealed class AiSearchWorkerRequest
+        {
+            [JsonPropertyName("query")]
+            public string Query { get; set; } = string.Empty;
+        }
+
+        private sealed class AiSearchResult
+        {
+            [JsonPropertyName("id")]
+            public string Id { get; set; } = string.Empty;
+
+            [JsonPropertyName("finalScore")]
+            public double FinalScore { get; set; }
+
+            [JsonPropertyName("matchScore")]
+            public double MatchScore { get; set; }
+
+            [JsonPropertyName("clipScore")]
+            public double ClipScore { get; set; }
+
+            [JsonPropertyName("colorScore")]
+            public double ColorScore { get; set; }
+
+            [JsonPropertyName("metadataScore")]
+            public double MetadataScore { get; set; }
+
+            [JsonPropertyName("visualScore")]
+            public double VisualScore { get; set; }
+
+            [JsonPropertyName("visualPenalty")]
+            public double VisualPenalty { get; set; }
+
+            [JsonPropertyName("features")]
+            public AiTrainingFeatures? Features { get; set; }
         }
     }
 }

@@ -54,7 +54,10 @@
                                 Content="Filter using Name"
                                 GroupName="ColorMode"
                                 IsChecked="{Binding FilterByString}" />
-                            <RadioButton Content="Don't Filter with Color" GroupName="ColorMode" />
+                            <RadioButton
+                                Content="Don't Filter with Color"
+                                GroupName="ColorMode"
+                                IsChecked="{Binding DontFilterByColor}" />
 
                             <TextBlock Margin="0,0,0,0" Text="Glaze Type" />
                             <ComboBox ItemsSource="{Binding GlazeTypes}" SelectedItem="{Binding SelectedGlazeType, Mode=TwoWay}" />
@@ -136,6 +139,101 @@
                             Height="4" />
                     </StackPanel>
                 </TabItem>
+                <TabItem
+                    FontSize="20"
+                    FontWeight="DemiBold"
+                    Header="AI Search">
+                    <Grid Margin="10,30,10,10" RowDefinitions="Auto,*,Auto,Auto,Auto">
+                        <StackPanel Grid.Row="0" Spacing="6">
+                            <TextBlock
+                                FontSize="14"
+                                FontWeight="DemiBold"
+                                Text="AI Chat Search" />
+                            <TextBlock
+                                Text="{Binding AiSearchStatus}"
+                                TextWrapping="Wrap" />
+                            <TextBlock
+                                FontStyle="Italic"
+                                Text="{Binding AiResolvedSearchPrompt}"
+                                TextWrapping="Wrap" />
+                            <TextBlock
+                                FontSize="12"
+                                Text="{Binding AiSearchImageLabel}"
+                                TextWrapping="Wrap" />
+                        </StackPanel>
+
+                        <Border
+                            Grid.Row="1"
+                            Margin="0,12,0,8"
+                            Padding="8"
+                            Background="#FFFFFF"
+                            BorderBrush="#D0D0D0"
+                            BorderThickness="1"
+                            CornerRadius="6">
+                            <ScrollViewer VerticalScrollBarVisibility="Auto">
+                                <ItemsControl ItemsSource="{Binding AiChatMessages}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate x:DataType="vm:AiChatMessageViewModel">
+                                            <Border
+                                                Margin="0,0,0,8"
+                                                Padding="8"
+                                                Background="#F8F8F8"
+                                                BorderBrush="#E0E0E0"
+                                                BorderThickness="1"
+                                                CornerRadius="4">
+                                                <StackPanel Spacing="3">
+                                                    <TextBlock
+                                                        FontSize="12"
+                                                        FontWeight="DemiBold"
+                                                        Text="{Binding Sender}" />
+                                                    <TextBlock
+                                                        Text="{Binding Message}"
+                                                        TextWrapping="Wrap" />
+                                                </StackPanel>
+                                            </Border>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </ScrollViewer>
+                        </Border>
+
+                        <TextBox
+                            Grid.Row="2"
+                            MinHeight="78"
+                            AcceptsReturn="True"
+                            Text="{Binding AiSearchPrompt, Mode=TwoWay}"
+                            TextWrapping="Wrap"
+                            Watermark="give me something brown" />
+
+                        <Grid Grid.Row="3" Margin="0,8,0,0" ColumnDefinitions="*,Auto,Auto,Auto">
+                            <ProgressBar
+                                Grid.Column="0"
+                                Height="6"
+                                VerticalAlignment="Center"
+                                IsIndeterminate="True"
+                                IsVisible="{Binding IsAiSearchLoading}" />
+                            <Button
+                                Grid.Column="1"
+                                Width="76"
+                                Margin="8,0,0,0"
+                                Click="OnAiImageButtonClicked"
+                                Content="Image"
+                                ToolTip.Tip="Attach an image for visual search" />
+                            <Button
+                                Grid.Column="2"
+                                Width="76"
+                                Margin="8,0,0,0"
+                                Command="{Binding ResetAiConversationCommand}"
+                                Content="Reset" />
+                            <Button
+                                Grid.Column="3"
+                                Width="96"
+                                Margin="8,0,0,0"
+                                Command="{Binding AiSearchCommand}"
+                                Content="Send" />
+                        </Grid>
+                    </Grid>
+                </TabItem>
             </TabControl>
         </Border>
 
@@ -160,23 +258,28 @@
                     <ItemsControl.ItemTemplate>
                         <DataTemplate>
                             <Button
-                                Width="150"
-                                Height="150"
+                                Width="160"
+                                Height="185"
                                 Margin="10,10,0,0"
                                 Background="#FFFFFF"
                                 Click="OnCardClicked">
-                                <Border
-                                    Width="150"
-                                    Height="150"
-                                    Margin="5"
-                                    BorderBrush="Gray"
-                                    BorderThickness="1"
-                                    CornerRadius="4">
-                                    <Image
-                                        Width="120"
-                                        Height="120"
-                                        Source="{Binding Image}" />
-                                </Border>
+                                <StackPanel>
+                                    <Border
+                                        Width="150"
+                                        Height="150"
+                                        Margin="5"
+                                        BorderBrush="Gray"
+                                        BorderThickness="1"
+                                        CornerRadius="4">
+                                        <Image
+                                            Width="120"
+                                            Height="120"
+                                            Source="{Binding Image}" />
+                                    </Border>
+                                    <TextBlock
+                                        HorizontalAlignment="Center"
+                                        Text="{Binding AiScoreString}" />
+                                </StackPanel>
                             </Button>
                         </DataTemplate>
 
@@ -242,6 +345,68 @@
                     <TextBlock HorizontalAlignment="Center" TextAlignment="Center">
                         <Run Text="{Binding SelectedCard.ColorName}" />
                     </TextBlock>
+                    <TextBlock HorizontalAlignment="Center" TextAlignment="Center">
+                        <Run FontWeight="DemiBold" TextDecorations="Underline" Text="Auto Tags" />
+                    </TextBlock>
+                    <TextBlock
+                        HorizontalAlignment="Center"
+                        Text="{Binding SelectedCard.AutoTags}"
+                        TextAlignment="Center"
+                        TextWrapping="Wrap" />
+                    <TextBlock HorizontalAlignment="Center" TextAlignment="Center">
+                        <Run FontWeight="DemiBold" TextDecorations="Underline" Text="Auto Keywords" />
+                    </TextBlock>
+                    <TextBlock
+                        HorizontalAlignment="Center"
+                        Text="{Binding SelectedCard.AutoKeywords}"
+                        TextAlignment="Center"
+                        TextWrapping="Wrap" />
+                    <Border
+                        Margin="0,8,0,0"
+                        Padding="8"
+                        Background="#FFFFFF"
+                        BorderBrush="#D0D0D0"
+                        BorderThickness="1"
+                        CornerRadius="4">
+                        <StackPanel Spacing="6">
+                            <TextBlock
+                                HorizontalAlignment="Center"
+                                FontWeight="DemiBold"
+                                Text="AI Training" />
+                            <TextBlock
+                                FontSize="11"
+                                Text="{Binding SelectedCard.AiFeedbackStatus}"
+                                TextAlignment="Center"
+                                TextWrapping="Wrap" />
+                            <UniformGrid Columns="2" Rows="2">
+                                <Button
+                                    Margin="2"
+                                    Command="{Binding MarkAiGoodCommand}"
+                                    Content="Good" />
+                                <Button
+                                    Margin="2"
+                                    Command="{Binding MarkAiBadCommand}"
+                                    Content="Bad" />
+                                <Button
+                                    Margin="2"
+                                    Command="{Binding MarkAiWrongColorCommand}"
+                                    Content="Color" />
+                                <Button
+                                    Margin="2"
+                                    Command="{Binding MarkAiHasDarkEdgesCommand}"
+                                    Content="Edges" />
+                            </UniformGrid>
+                            <Button
+                                HorizontalAlignment="Stretch"
+                                Command="{Binding TrainAiRankingCommand}"
+                                Content="Train Weights" />
+                            <TextBlock
+                                FontSize="11"
+                                Text="{Binding AiTrainingStatus}"
+                                TextAlignment="Center"
+                                TextWrapping="Wrap" />
+                        </StackPanel>
+                    </Border>
                     <!-- <TextBlock Text="{Binding SelectedCard.ImagePath}"/> -->
                     <!-- <TextBlock Text="{Binding SelectedCard.Lab}" /> -->
 
