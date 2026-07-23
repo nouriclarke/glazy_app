@@ -3,6 +3,7 @@ using ASTEM_DB.ViewModels;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
 using Avalonia.Markup.Xaml;
+using Avalonia.Media.Imaging;
 using Avalonia.Platform.Storage;
 using Avalonia.Threading;
 
@@ -22,6 +23,7 @@ namespace ASTEM_DB.Views
                     DispatcherPriority.Background
                 );
         }
+
         private void OnCardClicked(object? sender, RoutedEventArgs e)
         {
             if (sender is Button button && button.DataContext is CardItemViewModel clickedCard)
@@ -29,9 +31,7 @@ namespace ASTEM_DB.Views
                 if (this.DataContext is MainWindowViewModel vm)
                 {
                     if (vm.SelectedCard == clickedCard)
-                    {
                         vm.IsSidebarVisible = !vm.IsSidebarVisible;
-                    }
                     else
                     {
                         vm.SelectedCard = clickedCard;

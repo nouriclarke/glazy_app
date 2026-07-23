@@ -38,20 +38,14 @@ namespace ASTEM_DB.ViewModels
         public string? SelectedGlazeType
         {
             get => _selectedGlazeType;
-            set
-            {
-                this.RaiseAndSetIfChanged(ref _selectedGlazeType, value);
-            }
+            set => this.RaiseAndSetIfChanged(ref _selectedGlazeType, value);
         }
 
         private string? _selectedSurfaceCondition;
         public string? SelectedSurfaceCondition
         {
             get => _selectedSurfaceCondition;
-            set
-            {
-                this.RaiseAndSetIfChanged(ref _selectedSurfaceCondition, value);
-            }
+            set => this.RaiseAndSetIfChanged(ref _selectedSurfaceCondition, value);
         }
 
         public ObservableCollection<string> FiringTypes { get; } = new();
@@ -60,10 +54,7 @@ namespace ASTEM_DB.ViewModels
         public string? SelectedFiringType
         {
             get => _selectedFiringType;
-            set
-            {
-                this.RaiseAndSetIfChanged(ref _selectedFiringType, value);
-            }
+            set => this.RaiseAndSetIfChanged(ref _selectedFiringType, value);
         }
 
         private CardItemViewModel? _selectedCard;
@@ -99,7 +90,6 @@ namespace ASTEM_DB.ViewModels
             {
                 var clamped = Math.Clamp(value, 0, 255);
                 if (_red == clamped) return;
-
                 _red = clamped;
                 this.RaisePropertyChanged(nameof(Red));
                 UpdateSelectedColor();
@@ -115,13 +105,13 @@ namespace ASTEM_DB.ViewModels
             {
                 var clamped = Math.Clamp(value, 0, 255);
                 if (_green == clamped) return;
-
                 _green = clamped;
                 this.RaisePropertyChanged(nameof(Green));
                 UpdateSelectedColor();
                 labConversion();
             }
         }
+
         private int _blue;
         public int Blue
         {
@@ -130,7 +120,6 @@ namespace ASTEM_DB.ViewModels
             {
                 var clamped = Math.Clamp(value, 0, 255);
                 if (_blue == clamped) return;
-
                 _blue = clamped;
                 this.RaisePropertyChanged(nameof(Blue));
                 UpdateSelectedColor();
@@ -142,29 +131,24 @@ namespace ASTEM_DB.ViewModels
         public double Lightness
         {
             get => _lightness;
-            set
-            {
-                this.RaiseAndSetIfChanged(ref _lightness, value);
-            }
+            set => this.RaiseAndSetIfChanged(ref _lightness, value);
         }
+
         private double _redGreen;
         public double RedGreen
         {
             get => _redGreen;
-            set
-            {
-                this.RaiseAndSetIfChanged(ref _redGreen, value);
-            }
+            set => this.RaiseAndSetIfChanged(ref _redGreen, value);
         }
+
         private double _blueYellow;
         public double BlueYellow
         {
             get => _blueYellow;
-            set
-            {
-                this.RaiseAndSetIfChanged(ref _blueYellow, value);
-            }
+            set => this.RaiseAndSetIfChanged(ref _blueYellow, value);
         }
+
+        // --- Existing glaze search ---
 
         private CancellationTokenSource? _searchCts;
         private CancellationTokenSource? _aiSearchCts;
@@ -304,11 +288,16 @@ namespace ASTEM_DB.ViewModels
             get => _aiTrainingStatus;
             set => this.RaiseAndSetIfChanged(ref _aiTrainingStatus, value);
         }
-
+        //here
         private async Task ExecuteAiSearchCommandAsync()
         {
             var prompt = AiSearchPrompt?.Trim();
-            if (string.IsNullOrWhiteSpace(prompt))
+            var imagePath = AiSearchImagePath?.Trim();
+
+            bool hasText = !string.IsNullOrWhiteSpace(prompt);
+            bool hasImage = !string.IsNullOrWhiteSpace(imagePath) && File.Exists(imagePath);
+
+            if (!hasText && !hasImage)
             {
                 AiSearchStatus = string.IsNullOrWhiteSpace(AiSearchImagePath)
                     ? "Enter an AI search message first."
@@ -319,78 +308,28 @@ namespace ASTEM_DB.ViewModels
             _aiSearchCts?.Cancel();
             _aiSearchCts = new CancellationTokenSource();
             var cancellationToken = _aiSearchCts.Token;
-            var resolvedPrompt = ResolveAiConversationPrompt(prompt);
 
-            AiChatMessages.Add(new AiChatMessageViewModel("You", prompt));
-            AiSearchPrompt = string.Empty;
-            AiResolvedSearchPrompt = resolvedPrompt;
+            IsAiSearchLoading = true;
+            CardItems.Clear();
+            SelectedCard = null;
+            IsSidebarVisible = false;
 
             try
             {
-                IsAiSearchLoading = true;
-                AiSearchStatus = $"Searching for: {resolvedPrompt}";
-
-                var response = await RunLocalAiSearchAsync(resolvedPrompt, cancellationToken);
-                cancellationToken.ThrowIfCancellationRequested();
-                var minimumMatchScore = AiMinimumMatchScore;
-                var filteredResults = response.Results
-                    .Where(result => GetDisplayMatchScore(result) >= minimumMatchScore)
-                    .GroupBy(result => result.Id)
-                    .Select(group => group
-                        .OrderByDescending(GetDisplayMatchScore)
-                        .First())
-                    .ToList();
-                var resultById = filteredResults.ToDictionary(result => result.Id);
-                var idToScore = filteredResults.ToDictionary(result => result.Id, result => result.FinalScore);
-                var items = await _db.GetCardItemsByIdsAsync(filteredResults.Select(result => result.Id));
-                cancellationToken.ThrowIfCancellationRequested();
-
-                CardItems.Clear();
-                SelectedCard = null;
-                IsSidebarVisible = false;
-
-                foreach (var item in items)
-                {
-                    if (idToScore.TryGetValue(item.Id, out var score))
-                    {
-                        var matchScore = resultById.TryGetValue(item.Id, out var scoreResult) ? GetDisplayMatchScore(scoreResult) : 0;
-                        item.AiScore = matchScore > 0 ? matchScore : score;
-                    }
-
-                    if (resultById.TryGetValue(item.Id, out var aiResult))
-                    {
-                        item.AiClipScore = aiResult.ClipScore;
-                        item.AiColorScore = aiResult.ColorScore;
-                        item.AiMetadataScore = aiResult.MetadataScore;
-                        item.AiVisualScore = aiResult.VisualScore;
-                        item.AiVisualPenalty = aiResult.VisualPenalty;
-                        item.AiExclusionPenalty = aiResult.Features?.ExclusionPenalty ?? 0;
-                        item.AiFeedbackStatus = string.Empty;
-                    }
-
-                    var lab = new Lab { L = item.ColorL, A = item.ColorA, B = item.ColorB };
-                    item.ColorName = GetColorName(lab);
-                    CardItems.Add(item);
-                }
-
-                IsFilterEmpty = CardItems.Count == 0;
-                AiSearchStatus = CardItems.Count == 0
-                    ? $"No AI matches found at {AiMinimumMatchPercent}%+ match strictness."
-                    : $"Showing {CardItems.Count} local AI matches at {AiMinimumMatchPercent}%+ from {response.SearchedRows} database tiles.";
-                AiChatMessages.Add(new AiChatMessageViewModel(
-                    "Glazy",
-                    CardItems.Count == 0
-                        ? $"No matches found at {AiMinimumMatchPercent}%+ for \"{resolvedPrompt}\"."
-                        : $"Showing {CardItems.Count} matches at {AiMinimumMatchPercent}%+ for \"{resolvedPrompt}\"."
-                ));
+                if (hasImage && hasText)
+                    await ExecuteCombinedSearchAsync(prompt!, imagePath!, cancellationToken);
+                else if (hasImage)
+                    await ExecuteClipSearchAsync(imagePath!, cancellationToken);
+                else
+                    await ExecuteTextSearchAsync(prompt!, cancellationToken);
             }
             catch (OperationCanceledException)
             {
-                AiSearchStatus = "AI search was canceled.";
+                AiSearchStatus = "Search was canceled.";
             }
             catch (Exception ex)
             {
-                AiSearchStatus = $"AI search failed: {ex.Message}";
+                AiSearchStatus = $"Search failed: {ex.Message}";
                 AiChatMessages.Add(new AiChatMessageViewModel("Glazy", AiSearchStatus));
             }
             finally
@@ -399,7 +338,126 @@ namespace ASTEM_DB.ViewModels
             }
         }
 
-        public async Task SetPendingAiSearchImageAsync(string imagePath)
+        private async Task ExecuteClipSearchAsync(string imagePath, CancellationToken cancellationToken)
+        {
+            AiSearchStatus = "Searching by image similarity...";
+            AiChatMessages.Add(new AiChatMessageViewModel("You", "[Image search]"));
+
+            var matches = await _searchService.SearchByImageAsync(imagePath);
+
+            if (!matches.Any())
+            {
+                AiSearchStatus = "No similar tiles found. Make sure tiles have been uploaded.";
+                IsFilterEmpty = true;
+                return;
+            }
+
+            var scoreById = new Dictionary<string, double>();
+            foreach (var m in matches)
+                scoreById[m.TileId] = m.Score;
+            var items = await _db.GetCardItemsByIdsAsync(matches.Select(m => m.TileId));
+
+            foreach (var item in items)
+            {
+                if (scoreById.TryGetValue(item.Id, out var dist))
+                    item.AiScore = Math.Exp(-dist / 2.0);
+                var lab = new Lab { L = item.ColorL, A = item.ColorA, B = item.ColorB };
+                item.ColorName = GetColorName(lab);
+                CardItems.Add(item);
+            }
+
+            IsFilterEmpty = !CardItems.Any();
+            AiSearchStatus = $"Found {CardItems.Count} visually similar tiles.";
+            AiChatMessages.Add(new AiChatMessageViewModel("Glazy", AiSearchStatus));
+        }
+
+        private async Task ExecuteCombinedSearchAsync(string prompt, string imagePath, CancellationToken cancellationToken)
+        {
+            AiSearchStatus = "Running combined visual + text search...";
+            var resolvedPrompt = ResolveAiConversationPrompt(prompt);
+            AiChatMessages.Add(new AiChatMessageViewModel("You", $"[Image] + {prompt}"));
+            AiSearchPrompt = string.Empty;
+            AiResolvedSearchPrompt = resolvedPrompt;
+
+            var clipMatches = await _searchService.SearchByImageAsync(imagePath);
+            var clipDistanceById = clipMatches.ToDictionary(m => m.TileId, m => m.Score);
+
+            cancellationToken.ThrowIfCancellationRequested();
+
+            AiSearchStatus = "Re-ranking by text and color...";
+            var textResponse = await RunLocalAiSearchAsync(resolvedPrompt, cancellationToken);
+            var textScoreById = textResponse.Results.ToDictionary(r => r.Id, r => r.FinalScore);
+
+            cancellationToken.ThrowIfCancellationRequested();
+
+            var combined = clipDistanceById
+                .Select(kvp => new
+                {
+                    Id = kvp.Key,
+                    ClipSim = Math.Exp(-kvp.Value / 2.0),
+                    TextScore = textScoreById.TryGetValue(kvp.Key, out var ts) ? ts : 0.0
+                })
+                .Select(x => new
+                {
+                    x.Id,
+                    CombinedScore = 0.6 * x.ClipSim + 0.4 * x.TextScore
+                })
+                .OrderByDescending(x => x.CombinedScore)
+                .ToList();
+
+            var items = await _db.GetCardItemsByIdsAsync(combined.Select(x => x.Id));
+            var scoreMap = combined.ToDictionary(x => x.Id, x => x.CombinedScore);
+
+            foreach (var item in items)
+            {
+                if (scoreMap.TryGetValue(item.Id, out var score))
+                    item.AiScore = score;
+                var lab = new Lab { L = item.ColorL, A = item.ColorA, B = item.ColorB };
+                item.ColorName = GetColorName(lab);
+                CardItems.Add(item);
+            }
+
+            var sorted = CardItems.OrderByDescending(c => c.AiScore).ToList();
+            CardItems.Clear();
+            foreach (var item in sorted)
+                CardItems.Add(item);
+
+            IsFilterEmpty = !CardItems.Any();
+            AiSearchStatus = $"Found {CardItems.Count} tiles matching visual + text criteria.";
+            AiChatMessages.Add(new AiChatMessageViewModel("Glazy", AiSearchStatus));
+        }
+
+        private async Task ExecuteTextSearchAsync(string prompt, CancellationToken cancellationToken)
+        {
+            var resolvedPrompt = ResolveAiConversationPrompt(prompt);
+            AiChatMessages.Add(new AiChatMessageViewModel("You", prompt));
+            AiSearchPrompt = string.Empty;
+            AiResolvedSearchPrompt = resolvedPrompt;
+            AiSearchStatus = $"Searching for: {resolvedPrompt}";
+
+            var response = await RunLocalAiSearchAsync(resolvedPrompt, cancellationToken);
+            cancellationToken.ThrowIfCancellationRequested();
+
+            var idToScore = response.Results.ToDictionary(r => r.Id, r => r.FinalScore);
+            var items = await _db.GetCardItemsByIdsAsync(response.Results.Select(r => r.Id));
+
+            foreach (var item in items)
+            {
+                if (idToScore.TryGetValue(item.Id, out var score))
+                    item.AiScore = score;
+                var lab = new Lab { L = item.ColorL, A = item.ColorA, B = item.ColorB };
+                item.ColorName = GetColorName(lab);
+                CardItems.Add(item);
+            }
+
+            IsFilterEmpty = !CardItems.Any();
+            AiSearchStatus = CardItems.Count == 0
+                ? "No matches found."
+                : $"Found {CardItems.Count} matches for \"{resolvedPrompt}\".";
+            AiChatMessages.Add(new AiChatMessageViewModel("Glazy", AiSearchStatus));
+        }
+
+        public void SetPendingAiSearchImage(string imagePath)
         {
             if (string.IsNullOrWhiteSpace(imagePath))
                 return;
@@ -1105,6 +1163,7 @@ namespace ASTEM_DB.ViewModels
             get => _isFilterEmpty;
             set => this.RaiseAndSetIfChanged(ref _isFilterEmpty, value);
         }
+
         private bool _filterByString;
         public bool FilterByString
         {
@@ -1119,22 +1178,16 @@ namespace ASTEM_DB.ViewModels
                 }
             }
         }
-        private async void FilterCardItems()
-        {
-            await FilterCardItemsAsync(CancellationToken.None);
-        }
 
         private async Task FilterCardItemsAsync(CancellationToken cancellationToken)
         {
             var allItems = await _db.GetFilteredCardItemMetadataAsync(SelectedGlazeType, SelectedSurfaceCondition, SelectedFiringType);
-
             var selectedLab = new Lab { L = Lightness, A = RedGreen, B = BlueYellow };
             double threshold = 25.0;
 
             foreach (var item in allItems)
             {
                 cancellationToken.ThrowIfCancellationRequested();
-
                 var lab = new Lab { L = item.ColorL, A = item.ColorA, B = item.ColorB };
                 item.ColorName = GetColorName(lab);
             }
@@ -1142,13 +1195,9 @@ namespace ASTEM_DB.ViewModels
             var filtered = allItems.Where(item =>
             {
                 if (FilterByString)
-                {
                     return item.ColorName == SelectedColorPalette;
-                }
                 else if (!FilterByColor)
-                {
                     return true;
-                }
                 else
                 {
                     var lab = new Lab { L = item.ColorL, A = item.ColorA, B = item.ColorB };
@@ -1172,21 +1221,18 @@ namespace ASTEM_DB.ViewModels
         }
 
         public ObservableCollection<string> ColorPalettes { get; } = new();
+
         private string? _selectedColorPalette;
         public string? SelectedColorPalette
         {
             get => _selectedColorPalette;
-            set
-            {
-                this.RaiseAndSetIfChanged(ref _selectedColorPalette, value);
-            }
+            set => this.RaiseAndSetIfChanged(ref _selectedColorPalette, value);
         }
 
         private async void LoadData()
         {
             var db = new DatabaseService();
 
-            // Load Glaze Types
             GlazeTypes.Clear();
             GlazeTypes.Add("All");
 
@@ -1201,7 +1247,6 @@ namespace ASTEM_DB.ViewModels
                 AiSearchStatus = $"Database unavailable: {CleanProcessMessage(ex.Message)}";
             }
 
-            // Load Surface Conditions
             SurfaceConditions.Clear();
             SurfaceConditions.Add("All");
 
@@ -1228,21 +1273,10 @@ namespace ASTEM_DB.ViewModels
             {
             }
 
-            // Set ColorPalettes
             ColorPalettes.Clear();
-            ColorPalettes.Add("Black");
-            ColorPalettes.Add("White");
-            ColorPalettes.Add("Cream");
-            ColorPalettes.Add("Red");
-            ColorPalettes.Add("Green");
-            ColorPalettes.Add("Yellow");
-            ColorPalettes.Add("Blue");
-            ColorPalettes.Add("Cyan");
-            ColorPalettes.Add("Magenta");
-            ColorPalettes.Add("Pink");
-            ColorPalettes.Add("Brown");
+            foreach (var c in new[] { "Black", "White", "Cream", "Red", "Green", "Yellow", "Blue", "Cyan", "Magenta", "Pink", "Brown" })
+                ColorPalettes.Add(c);
 
-            // Set default filters
             SelectedGlazeType = "All";
             SelectedSurfaceCondition = "All";
             SelectedFiringType = "All";
@@ -1302,7 +1336,6 @@ namespace ASTEM_DB.ViewModels
                 if (value == _selectedColor) return;
                 _selectedColor = value;
                 this.RaisePropertyChanged(nameof(SelectedColor));
-
                 _red = value.R;
                 _green = value.G;
                 _blue = value.B;
@@ -1312,35 +1345,34 @@ namespace ASTEM_DB.ViewModels
                 labConversion();
             }
         }
+
         private void UpdateSelectedColor()
         {
             var newColor = Color.FromRgb((byte)Red, (byte)Green, (byte)Blue);
             if (_selectedColor == newColor) return;
-
             _selectedColor = newColor;
             this.RaisePropertyChanged(nameof(SelectedColor));
         }
 
         private static readonly Dictionary<string, Lab> BasicColors = new()
         {
-            { "Black", new Lab { L = 0,   A = 0,   B = 0   } },
-            { "White", new Lab { L = 100, A = 0,   B = 0   } },
-            { "Cream", new Lab { L = 95,  A = -2,  B = 18  } },
-            { "Red",   new Lab { L = 53,  A = 80,  B = 67  } },
-            { "Green", new Lab { L = 87,  A = -86, B = 83  } },
-            { "Blue",  new Lab { L = 32,  A = 79,  B = -108} },
-            { "Yellow",new Lab { L = 97,  A = -21, B = 94  } },
-            { "Cyan",  new Lab { L = 91,  A = -48, B = -14 } },
-            { "Magenta",new Lab{ L = 60,  A = 98,  B = -60 } },
-            { "Brown", new Lab { L = 37,  A = 23,  B = 17  } },
-            { "Pink",  new Lab { L = 81,  A = 15,  B = 6   } }
+            { "Black",   new Lab { L = 0,   A = 0,   B = 0    } },
+            { "White",   new Lab { L = 100, A = 0,   B = 0    } },
+            { "Cream",   new Lab { L = 95,  A = -2,  B = 18   } },
+            { "Red",     new Lab { L = 53,  A = 80,  B = 67   } },
+            { "Green",   new Lab { L = 87,  A = -86, B = 83   } },
+            { "Blue",    new Lab { L = 32,  A = 79,  B = -108 } },
+            { "Yellow",  new Lab { L = 97,  A = -21, B = 94   } },
+            { "Cyan",    new Lab { L = 91,  A = -48, B = -14  } },
+            { "Magenta", new Lab { L = 60,  A = 98,  B = -60  } },
+            { "Brown",   new Lab { L = 37,  A = 23,  B = 17   } },
+            { "Pink",    new Lab { L = 81,  A = 15,  B = 6    } }
         };
 
         public static string GetColorName(Lab inputLab)
         {
             string colorName = "Unknown";
             double minDeltaE = double.MaxValue;
-
             foreach (var (name, lab) in BasicColors)
             {
                 double deltaE = inputLab.Compare(lab, new CieDe2000Comparison());
@@ -1350,7 +1382,6 @@ namespace ASTEM_DB.ViewModels
                     colorName = name;
                 }
             }
-            // Only assign if close enough
             return minDeltaE <= 30 ? colorName : "Other";
         }
 

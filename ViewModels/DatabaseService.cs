@@ -24,7 +24,7 @@ namespace ASTEM_DB.Services
 
             var port = Environment.GetEnvironmentVariable("DB_PORT") ?? "3306";
             var user = Environment.GetEnvironmentVariable("DB_USER") ?? "ceramadmin";
-            var password = Environment.GetEnvironmentVariable("DB_PASSWORD") ?? "glazed-dev-password";
+            var password = Environment.GetEnvironmentVariable("DB_PASSWORD") ?? "J9J9NasakeMuyouAsuteroidoBerutoNo";
             var database = Environment.GetEnvironmentVariable("DB_NAME")
                 ?? Environment.GetEnvironmentVariable("MYSQL_DATABASE")
                 ?? "tilearchive";
@@ -39,53 +39,42 @@ namespace ASTEM_DB.Services
             {
                 await using var conn = new MySqlConnection(_connectionString);
                 await conn.OpenAsync();
-
                 string query = "SELECT Name FROM glazetype";
                 await using var cmd = new MySqlCommand(query, conn);
                 await using var reader = await cmd.ExecuteReaderAsync();
-
                 while (await reader.ReadAsync())
-                {
                     glazeTypes.Add(reader.GetString("Name"));
-                }
             }
             catch (Exception ex)
             {
                 Console.WriteLine($"Failed to connect/query MariaDB: {ex.Message}");
             }
-
             return glazeTypes;
         }
+
         public async Task<List<string>> GetSurfaceCondition()
         {
             var conditions = new List<string>();
-
             try
             {
                 await using var conn = new MySqlConnection(_connectionString);
                 await conn.OpenAsync();
-
                 string query = "SELECT Name FROM surfacecondition";
                 await using var cmd = new MySqlCommand(query, conn);
                 await using var reader = await cmd.ExecuteReaderAsync();
-
                 while (await reader.ReadAsync())
-                {
                     conditions.Add(reader.GetString("Name"));
-                }
             }
             catch (Exception ex)
             {
                 Console.WriteLine($"Failed to connect/query MariaDB: {ex.Message}");
             }
-
             return conditions;
         }
 
         public async Task<List<string>> GetFiringType()
         {
             var firingTypes = new List<string>();
-
             try
             {
                 await using var conn = new MySqlConnection(_connectionString);
@@ -94,7 +83,6 @@ namespace ASTEM_DB.Services
                 string query = "SELECT FiringType FROM testpiece WHERE FiringType IS NOT NULL AND FiringType <> '' GROUP BY FiringType";
                 await using var cmd = new MySqlCommand(query, conn);
                 await using var reader = await cmd.ExecuteReaderAsync();
-
                 while (await reader.ReadAsync())
                 {
                     if (reader["FiringType"] is string firingType && !string.IsNullOrWhiteSpace(firingType))
@@ -105,29 +93,24 @@ namespace ASTEM_DB.Services
             {
                 Console.WriteLine($"Failed to connect/query MariaDB: {ex.Message}");
             }
-
             return firingTypes;
         }
-
 
         public async Task<List<CardItemViewModel>> GetFilteredCardItemsAsync(string? glazeType, string? surfaceCondition, string? firingType)
         {
             var items = new List<CardItemViewModel>();
-
             await using var conn = new MySqlConnection(_connectionString);
             await conn.OpenAsync();
 
             var filters = new List<string>();
             if (!string.IsNullOrWhiteSpace(glazeType) && glazeType != "All")
                 filters.Add("gt.Name = @GlazeType");
-
             if (!string.IsNullOrWhiteSpace(surfaceCondition) && surfaceCondition != "All")
                 filters.Add("sc.Name = @SurfaceCondition");
             if (!string.IsNullOrWhiteSpace(firingType) && firingType != "All")
                 filters.Add("tp.FiringType = @FiringType");
 
             string whereClause = filters.Count > 0 ? "WHERE " + string.Join(" AND ", filters) : "";
-
             string query = $@"
         SELECT 
             tp.ID,
@@ -154,49 +137,36 @@ namespace ASTEM_DB.Services
             if (query.Contains("@FiringType")) cmd.Parameters.AddWithValue("@FiringType", firingType);
 
             await using var reader = await cmd.ExecuteReaderAsync();
-
             string basePath = Path.Combine(AppContext.BaseDirectory, "..", "..", "..");
-            // string imageDir = Path.Combine(basePath, "Assets");
             string placeholderPath = Path.Combine(basePath, "Assets/placeholder.png");
 
             while (await reader.ReadAsync())
             {
-                string imageName = "placeholder";
-                string imagePath = Path.Combine(basePath, imageName);
                 byte[] imageBytes = (byte[])reader["Image"];
-
-                Debug.WriteLine(reader["GlazeType"].ToString());
-                using (MemoryStream memoryStream = new MemoryStream(imageBytes))
+                using var memoryStream = new MemoryStream(imageBytes);
+                items.Add(new CardItemViewModel
                 {
-                    var image = new Avalonia.Media.Imaging.Bitmap(memoryStream);
-                    items.Add(new CardItemViewModel
-                    {
-                        Id = reader["ID"].ToString()!,
-                        Image = image,
-                        ImagePath = imagePath,
-                        GlazeType = reader["GlazeType"].ToString() ?? "Unknown",
-                        SurfaceCondition = reader["SurfaceCondition"].ToString() ?? "Unknown",
-                        ColorL = Convert.ToDouble(reader["Color_L"]),
-                        ColorA = Convert.ToDouble(reader["Color_A"]),
-                        ColorB = Convert.ToDouble(reader["Color_B"]),
-                        Lab = $"{reader["Color_L"]}, {reader["Color_A"]}, {reader["Color_B"]}",
-                        FiringType = reader["FiringType"].ToString() ?? "",
-                        SoilType = reader["SoilType"].ToString() ?? "",
-                        ChemicalComposition = reader["ChemicalComposition"].ToString() ?? "",
-                        AutoTags = reader["AutoTags"].ToString() ?? "",
-                        AutoKeywords = reader["AutoKeywords"].ToString() ?? ""
-                    });
-                }
-
+                    Id = reader["ID"].ToString()!,
+                    Image = new Avalonia.Media.Imaging.Bitmap(memoryStream),
+                    GlazeType = reader["GlazeType"].ToString() ?? "Unknown",
+                    SurfaceCondition = reader["SurfaceCondition"].ToString() ?? "Unknown",
+                    ColorL = Convert.ToDouble(reader["Color_L"]),
+                    ColorA = Convert.ToDouble(reader["Color_A"]),
+                    ColorB = Convert.ToDouble(reader["Color_B"]),
+                    Lab = $"{reader["Color_L"]}, {reader["Color_A"]}, {reader["Color_B"]}",
+                    FiringType = reader["FiringType"].ToString() ?? "",
+                    SoilType = reader["SoilType"].ToString() ?? "",
+                    ChemicalComposition = reader["ChemicalComposition"].ToString() ?? "",
+                    AutoTags = reader["AutoTags"].ToString() ?? "",
+                    AutoKeywords = reader["AutoKeywords"].ToString() ?? ""
+                });
             }
-
             return items;
         }
 
         public async Task<List<CardItemViewModel>> GetFilteredCardItemMetadataAsync(string? glazeType, string? surfaceCondition, string? firingType)
         {
             var items = new List<CardItemViewModel>();
-
             await using var conn = new MySqlConnection(_connectionString);
             await conn.OpenAsync();
 
@@ -209,7 +179,6 @@ namespace ASTEM_DB.Services
                 filters.Add("tp.FiringType = @FiringType");
 
             string whereClause = filters.Count > 0 ? "WHERE " + string.Join(" AND ", filters) : "";
-
             string query = $@"
         SELECT 
             tp.ID,
@@ -235,7 +204,6 @@ namespace ASTEM_DB.Services
             if (query.Contains("@FiringType")) cmd.Parameters.AddWithValue("@FiringType", firingType);
 
             await using var reader = await cmd.ExecuteReaderAsync();
-
             while (await reader.ReadAsync())
             {
                 items.Add(new CardItemViewModel
@@ -254,27 +222,69 @@ namespace ASTEM_DB.Services
                     AutoKeywords = reader["AutoKeywords"].ToString() ?? ""
                 });
             }
-
             return items;
         }
 
-        public async Task<Avalonia.Media.Imaging.Bitmap?> GetImageByIdAsync(string id)
+        public async Task<Bitmap?> GetImageByIdAsync(string id)
         {
             await using var conn = new MySqlConnection(_connectionString);
             await conn.OpenAsync();
-
             string query = "SELECT Image FROM testpiece WHERE ID = @Id LIMIT 1";
             await using var cmd = new MySqlCommand(query, conn);
             cmd.Parameters.AddWithValue("@Id", id);
-
             await using var reader = await cmd.ExecuteReaderAsync();
             if (await reader.ReadAsync())
             {
                 if (reader["Image"] is byte[] imageBytes && imageBytes.Length > 0)
                 {
                     using var memoryStream = new MemoryStream(imageBytes);
-                    return new Avalonia.Media.Imaging.Bitmap(memoryStream);
+                    return new Bitmap(memoryStream);
                 }
+            }
+            return null;
+        }
+
+        // Used by image search to load a full tile record by its ID
+        public async Task<CardItemViewModel?> GetCardItemByIdAsync(string id)
+        {
+            await using var conn = new MySqlConnection(_connectionString);
+            await conn.OpenAsync();
+
+            string query = @"
+                SELECT tp.ID, tp.Image, tp.Color_L, tp.Color_A, tp.Color_B,
+                    tp.FiringType, tp.SoilType, tp.ChemicalComposition,
+                    tp.AutoTags, tp.AutoKeywords,
+                    gt.Name AS GlazeType, sc.Name AS SurfaceCondition
+                FROM testpiece tp
+                LEFT JOIN glazetype gt ON tp.GlazeTypeID = gt.ID
+                LEFT JOIN surfacecondition sc ON tp.SurfaceConditionID = sc.ID
+                WHERE tp.ID = @Id
+                LIMIT 1";
+
+            await using var cmd = new MySqlCommand(query, conn);
+            cmd.Parameters.AddWithValue("@Id", id);
+            await using var reader = await cmd.ExecuteReaderAsync();
+
+            if (await reader.ReadAsync())
+            {
+                byte[] imageBytes = (byte[])reader["Image"];
+                using var memoryStream = new MemoryStream(imageBytes);
+                return new CardItemViewModel
+                {
+                    Id = reader["ID"].ToString()!,
+                    Image = new Bitmap(memoryStream),
+                    GlazeType = reader["GlazeType"].ToString() ?? "Unknown",
+                    SurfaceCondition = reader["SurfaceCondition"].ToString() ?? "Unknown",
+                    ColorL = Convert.ToDouble(reader["Color_L"]),
+                    ColorA = Convert.ToDouble(reader["Color_A"]),
+                    ColorB = Convert.ToDouble(reader["Color_B"]),
+                    Lab = $"{reader["Color_L"]}, {reader["Color_A"]}, {reader["Color_B"]}",
+                    FiringType = reader["FiringType"].ToString() ?? "",
+                    SoilType = reader["SoilType"].ToString() ?? "",
+                    ChemicalComposition = reader["ChemicalComposition"].ToString() ?? "",
+                    AutoTags = reader["AutoTags"].ToString() ?? "",
+                    AutoKeywords = reader["AutoKeywords"].ToString() ?? ""
+                };
             }
             return null;
         }
@@ -295,24 +305,14 @@ namespace ASTEM_DB.Services
 
             var parameterNames = idList.Select((_, index) => $"@id{index}").ToList();
             string query = $@"
-        SELECT 
-            tp.ID,
-            tp.Image,
-            tp.Color_L,
-            tp.Color_A,
-            tp.Color_B,
-            tp.FiringType,
-            tp.SoilType,
-            tp.ChemicalComposition,
-            tp.AutoTags,
-            tp.AutoKeywords,
-            gt.Name AS GlazeType,
-            sc.Name AS SurfaceCondition
-        FROM testpiece tp
-        LEFT JOIN glazetype gt ON tp.GlazeTypeID = gt.ID
-        LEFT JOIN surfacecondition sc ON tp.SurfaceConditionID = sc.ID
-        WHERE tp.ID IN ({string.Join(", ", parameterNames)});
-    ";
+                SELECT tp.ID, tp.Image, tp.Color_L, tp.Color_A, tp.Color_B,
+                    tp.FiringType, tp.SoilType, tp.ChemicalComposition,
+                    tp.AutoTags, tp.AutoKeywords,
+                    gt.Name AS GlazeType, sc.Name AS SurfaceCondition
+                FROM testpiece tp
+                LEFT JOIN glazetype gt ON tp.GlazeTypeID = gt.ID
+                LEFT JOIN surfacecondition sc ON tp.SurfaceConditionID = sc.ID
+                WHERE tp.ID IN ({string.Join(", ", parameterNames)});";
 
             await using var cmd = new MySqlCommand(query, conn);
             for (int i = 0; i < idList.Count; i++)
