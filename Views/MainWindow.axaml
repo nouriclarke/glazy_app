@@ -6,6 +6,7 @@
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     xmlns:vm="using:ASTEM_DB.ViewModels"
+    xmlns:converters="clr-namespace:ASTEM_DB.Converters"
     x:Name="rootWindow"
     Title="ASTEM DB"
     d:DesignHeight="700"
@@ -231,6 +232,19 @@
                                     Text="{Binding AiSearchPrompt, Mode=TwoWay}"
                                     TextWrapping="Wrap"
                                     Watermark="Describe the tile you want..." />
+                                <Border 
+                                    Width="72"
+                                    Height="72"
+                                    HorizontalAlignment="Left"
+                                    BorderBrush="#CBD5DB"
+                                    BorderThickness="1"
+                                    CornerRadius="6"
+                                    IsVisible="{Binding AiSearchImagePath, Converter={x:Static converters:StringNotEmptyConverter.Instance}}">
+                                    <Image
+                                        Margin="2"
+                                        Source="{Binding AiSearchImagePath, Converter={x:Static converters:PathToBitmapConverter.Instance}}"
+                                        Stretch="UniformToFill" />
+                                </Border>
                                 <TextBlock
                                     FontSize="11"
                                     Foreground="#65737A"

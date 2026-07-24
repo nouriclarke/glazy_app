@@ -29,6 +29,7 @@
     </PackageReference>
     <PackageReference Include="ColorMinePortable" Version="2.0.4" />
     <PackageReference Include="CommunityToolkit.Mvvm" Version="8.2.1" />
+    <PackageReference Include="DotNetEnv" Version="3.2.0" />
     <PackageReference Include="MySqlConnector" Version="2.4.0" />
     <PackageReference Include="ReactiveUI" Version="20.4.1" />
   </ItemGroup>

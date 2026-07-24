@@ -335,6 +335,8 @@ namespace ASTEM_DB.ViewModels
             finally
             {
                 IsAiSearchLoading = false;
+                AiSearchImagePath = string.Empty;
+                AiSearchImageLabel = string.Empty;
             }
         }
 
@@ -457,71 +459,17 @@ namespace ASTEM_DB.ViewModels
             AiChatMessages.Add(new AiChatMessageViewModel("Glazy", AiSearchStatus));
         }
 
-        public void SetPendingAiSearchImage(string imagePath)
+        public Task SetPendingAiSearchImageAsync(string imagePath)
         {
             if (string.IsNullOrWhiteSpace(imagePath))
-                return;
+                return Task.CompletedTask;
 
             var fileName = Path.GetFileName(imagePath);
             AiSearchImagePath = imagePath;
             AiSearchImageLabel = $"Image: {fileName}";
-            AiSearchStatus = "Image selected. Searching similar tiles...";
+            AiSearchStatus = "Image selected. Add a prompt or press Search.";
             AiChatMessages.Add(new AiChatMessageViewModel("You", $"Image: {fileName}"));
-
-            _aiSearchCts?.Cancel();
-            _aiSearchCts = new CancellationTokenSource();
-            var cancellationToken = _aiSearchCts.Token;
-
-            try
-            {
-                IsAiSearchLoading = true;
-                CardItems.Clear();
-                SelectedCard = null;
-                IsSidebarVisible = false;
-
-                var matches = await _searchService.SearchByImageAsync(imagePath, cancellationToken);
-                cancellationToken.ThrowIfCancellationRequested();
-
-                var filteredMatches = matches
-                    .Where(match => ImageDistanceToMatchScore(match.Score) >= AiMinimumMatchScore)
-                    .GroupBy(match => match.TileId)
-                    .Select(group => group.OrderBy(match => match.Score).First())
-                    .ToList();
-                var bestMatchById = filteredMatches.ToDictionary(match => match.TileId);
-                var items = await _db.GetCardItemsByIdsAsync(filteredMatches.Select(match => match.TileId));
-                cancellationToken.ThrowIfCancellationRequested();
-
-                foreach (var item in items)
-                {
-                    if (bestMatchById.TryGetValue(item.Id, out var match))
-                    {
-                        item.AiScore = ImageDistanceToMatchScore(match.Score);
-                    }
-
-                    var lab = new Lab { L = item.ColorL, A = item.ColorA, B = item.ColorB };
-                    item.ColorName = GetColorName(lab);
-                    CardItems.Add(item);
-                }
-
-                IsFilterEmpty = CardItems.Count == 0;
-                AiSearchStatus = CardItems.Count == 0
-                    ? $"No visually similar tiles found at {AiMinimumMatchPercent}%+ match strictness."
-                    : $"Showing {CardItems.Count} visually similar tile{(CardItems.Count == 1 ? "" : "s")} at {AiMinimumMatchPercent}%+.";
-                AiChatMessages.Add(new AiChatMessageViewModel("Glazy", AiSearchStatus));
-            }
-            catch (OperationCanceledException)
-            {
-                AiSearchStatus = "Image search was canceled.";
-            }
-            catch (Exception ex)
-            {
-                AiSearchStatus = $"Image search failed: {CleanProcessMessage(ex.Message)}";
-                AiChatMessages.Add(new AiChatMessageViewModel("Glazy", AiSearchStatus));
-            }
-            finally
-            {
-                IsAiSearchLoading = false;
-            }
+            return Task.CompletedTask;
         }
 
         public void SetAiSearchImageSelectionError(string message)
