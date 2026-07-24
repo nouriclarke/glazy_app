@@ -4,20 +4,16 @@ namespace ASTEM_DB.ViewModels
 {
     public class AiChatMessageViewModel : ViewModelBase
     {
-        private string _sender = string.Empty;
+        private readonly bool _isFromUser;
         private string _message = string.Empty;
 
         public AiChatMessageViewModel(string sender, string message)
         {
-            Sender = sender;
+            _isFromUser = sender == "You";
             Message = message;
         }
 
-        public string Sender
-        {
-            get => _sender;
-            set => this.RaiseAndSetIfChanged(ref _sender, value);
-        }
+        public string Sender => Localization.Get(_isFromUser ? "SenderYou" : "SenderGlazy");
 
         public string Message
         {
@@ -25,7 +21,12 @@ namespace ASTEM_DB.ViewModels
             set => this.RaiseAndSetIfChanged(ref _message, value);
         }
 
-        public bool IsFromUser => Sender == "You";
+        public bool IsFromUser => _isFromUser;
         public bool IsFromAssistant => !IsFromUser;
+
+        public void RefreshLocalization()
+        {
+            this.RaisePropertyChanged(nameof(Sender));
+        }
     }
 }

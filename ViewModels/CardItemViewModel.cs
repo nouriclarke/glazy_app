@@ -171,7 +171,7 @@ namespace ASTEM_DB.ViewModels
             set
             {
                 this.RaiseAndSetIfChanged(ref _aiScore, value);
-                AiScoreString = value > 0 ? $"AI Match: {System.Math.Clamp(value, 0, 1):P1}" : string.Empty;
+                UpdateAiScoreString();
             }
         }
 
@@ -221,6 +221,18 @@ namespace ASTEM_DB.ViewModels
         {
             get => _aiFeedbackStatus;
             set => this.RaiseAndSetIfChanged(ref _aiFeedbackStatus, value);
+        }
+
+        public void RefreshLocalization()
+        {
+            UpdateAiScoreString();
+        }
+
+        private void UpdateAiScoreString()
+        {
+            AiScoreString = AiScore > 0
+                ? Localization.Format("AiMatch", System.Math.Clamp(AiScore, 0, 1))
+                : string.Empty;
         }
     }
 }

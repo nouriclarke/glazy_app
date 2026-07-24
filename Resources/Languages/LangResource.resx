@@ -117,7 +117,79 @@
   <resheader name="writer">
     <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
   </resheader>
-  <data name="GalzeSearch" xml:space="preserve">
-    <value>GlazeSearch</value>
-  </data>
+  <data name="AppName" xml:space="preserve"><value>ASTEM DB</value></data>
+  <data name="Language" xml:space="preserve"><value>Language</value></data>
+  <data name="LanguageEnglish" xml:space="preserve"><value>English</value></data>
+  <data name="LanguageJapanese" xml:space="preserve"><value>Japanese</value></data>
+  <data name="GlazeSearch" xml:space="preserve"><value>Glaze Search</value></data>
+  <data name="AiSearch" xml:space="preserve"><value>AI Search</value></data>
+  <data name="FilterSpectrum" xml:space="preserve"><value>Filter using spectrum</value></data>
+  <data name="FilterName" xml:space="preserve"><value>Filter using name</value></data>
+  <data name="FilterNone" xml:space="preserve"><value>Don't filter by color</value></data>
+  <data name="GlazeType" xml:space="preserve"><value>Glaze Type</value></data>
+  <data name="SurfaceCondition" xml:space="preserve"><value>Surface Condition</value></data>
+  <data name="FiringAtmosphere" xml:space="preserve"><value>Firing Atmosphere</value></data>
+  <data name="FiringType" xml:space="preserve"><value>Firing Type</value></data>
+  <data name="SoilType" xml:space="preserve"><value>Soil Type</value></data>
+  <data name="ChemicalComposition" xml:space="preserve"><value>Chemical Composition</value></data>
+  <data name="ColorName" xml:space="preserve"><value>Color Name</value></data>
+  <data name="Color" xml:space="preserve"><value>Color</value></data>
+  <data name="Search" xml:space="preserve"><value>Search</value></data>
+  <data name="FindWithAi" xml:space="preserve"><value>Find with AI</value></data>
+  <data name="PromptWatermark" xml:space="preserve"><value>Describe the tile you want...</value></data>
+  <data name="MatchStrictness" xml:space="preserve"><value>Match strictness</value></data>
+  <data name="MatchMinimum" xml:space="preserve"><value>{0}% minimum</value></data>
+  <data name="Loose" xml:space="preserve"><value>Loose</value></data>
+  <data name="Balanced" xml:space="preserve"><value>Balanced</value></data>
+  <data name="Strict" xml:space="preserve"><value>Strict</value></data>
+  <data name="StrictnessLoose" xml:space="preserve"><value>Loose (40%+)</value></data>
+  <data name="StrictnessBalanced" xml:space="preserve"><value>Balanced (60%+)</value></data>
+  <data name="StrictnessStrict" xml:space="preserve"><value>Strict (75%+)</value></data>
+  <data name="SearchImage" xml:space="preserve"><value>Search image</value></data>
+  <data name="ChooseTileImage" xml:space="preserve"><value>Choose a tile image</value></data>
+  <data name="Reset" xml:space="preserve"><value>Reset</value></data>
+  <data name="NoGlazesFound" xml:space="preserve"><value>NO GLAZES FOUND</value></data>
+  <data name="AutoTags" xml:space="preserve"><value>Auto Tags</value></data>
+  <data name="AutoKeywords" xml:space="preserve"><value>Auto Keywords</value></data>
+  <data name="AiTraining" xml:space="preserve"><value>AI Training</value></data>
+  <data name="FeedbackGood" xml:space="preserve"><value>Good</value></data>
+  <data name="FeedbackBad" xml:space="preserve"><value>Bad</value></data>
+  <data name="FeedbackColor" xml:space="preserve"><value>Color</value></data>
+  <data name="FeedbackEdges" xml:space="preserve"><value>Edges</value></data>
+  <data name="TrainWeights" xml:space="preserve"><value>Train Weights</value></data>
+  <data name="SelectTileImage" xml:space="preserve"><value>Select a tile image</value></data>
+  <data name="ImageFiles" xml:space="preserve"><value>Image files</value></data>
+  <data name="SenderYou" xml:space="preserve"><value>You</value></data>
+  <data name="SenderGlazy" xml:space="preserve"><value>Glazy</value></data>
+  <data name="AiMatch" xml:space="preserve"><value>AI Match: {0:P1}</value></data>
+  <data name="StatusAiReady" xml:space="preserve"><value>AI search ready.</value></data>
+  <data name="StatusDatabaseUnavailable" xml:space="preserve"><value>Database unavailable: {0}</value></data>
+  <data name="StatusEnterPrompt" xml:space="preserve"><value>Enter an AI search message first.</value></data>
+  <data name="StatusEnterRefinement" xml:space="preserve"><value>Enter a message to refine the image results, or choose another image.</value></data>
+  <data name="StatusSearchingFor" xml:space="preserve"><value>Searching for: {0}</value></data>
+  <data name="StatusNoAiMatches" xml:space="preserve"><value>No AI matches found at {0}%+ match strictness.</value></data>
+  <data name="StatusShowingLocalMatches" xml:space="preserve"><value>Showing {0} local AI matches at {1}%+ from {2} database tiles.</value></data>
+  <data name="ChatNoMatches" xml:space="preserve"><value>No matches found at {0}%+ for &quot;{1}&quot;.</value></data>
+  <data name="ChatShowingMatches" xml:space="preserve"><value>Showing {0} matches at {1}%+ for &quot;{2}&quot;.</value></data>
+  <data name="StatusAiCanceled" xml:space="preserve"><value>AI search was canceled.</value></data>
+  <data name="StatusAiFailed" xml:space="preserve"><value>AI search failed: {0}</value></data>
+  <data name="ImageLabel" xml:space="preserve"><value>Image: {0}</value></data>
+  <data name="StatusImageSearching" xml:space="preserve"><value>Image selected. Searching similar tiles...</value></data>
+  <data name="StatusNoVisualMatches" xml:space="preserve"><value>No visually similar tiles found at {0}%+ match strictness.</value></data>
+  <data name="StatusShowingVisualMatches" xml:space="preserve"><value>Showing {0} visually similar tiles at {1}%+.</value></data>
+  <data name="StatusImageCanceled" xml:space="preserve"><value>Image search was canceled.</value></data>
+  <data name="StatusImageFailed" xml:space="preserve"><value>Image search failed: {0}</value></data>
+  <data name="StatusImageSelectionFailed" xml:space="preserve"><value>Image selection failed: {0}</value></data>
+  <data name="StatusAiReset" xml:space="preserve"><value>AI search reset.</value></data>
+  <data name="TrainingSelectResult" xml:space="preserve"><value>Select an AI result to label it.</value></data>
+  <data name="TrainingSelectTile" xml:space="preserve"><value>Select a tile result before labeling it.</value></data>
+  <data name="TrainingRunSearch" xml:space="preserve"><value>Run an AI search before saving training feedback.</value></data>
+  <data name="FeedbackGoodSaved" xml:space="preserve"><value>Good match saved</value></data>
+  <data name="FeedbackBadSaved" xml:space="preserve"><value>Bad match saved</value></data>
+  <data name="FeedbackWrongColorSaved" xml:space="preserve"><value>Wrong color saved</value></data>
+  <data name="FeedbackDarkEdgeSaved" xml:space="preserve"><value>Dark edge issue saved</value></data>
+  <data name="TrainingReady" xml:space="preserve"><value>{0}. Run Train Weights when you are ready.</value></data>
+  <data name="TrainingInProgress" xml:space="preserve"><value>Training ranking weights...</value></data>
+  <data name="TrainingFailed" xml:space="preserve"><value>Training failed: {0}</value></data>
+  <data name="TrainingComplete" xml:space="preserve"><value>Training complete: {0} examples, {1:P0} fit.</value></data>
 </root>

@@ -117,7 +117,79 @@
   <resheader name="writer">
     <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
   </resheader>
-  <data name="GalzeSearch" xml:space="preserve">
-    <value>釉薬検索</value>
-  </data>
+  <data name="AppName" xml:space="preserve"><value>ASTEM DB</value></data>
+  <data name="Language" xml:space="preserve"><value>言語</value></data>
+  <data name="LanguageEnglish" xml:space="preserve"><value>英語</value></data>
+  <data name="LanguageJapanese" xml:space="preserve"><value>日本語</value></data>
+  <data name="GlazeSearch" xml:space="preserve"><value>釉薬検索</value></data>
+  <data name="AiSearch" xml:space="preserve"><value>AI検索</value></data>
+  <data name="FilterSpectrum" xml:space="preserve"><value>色スペクトルで絞り込む</value></data>
+  <data name="FilterName" xml:space="preserve"><value>色名で絞り込む</value></data>
+  <data name="FilterNone" xml:space="preserve"><value>色で絞り込まない</value></data>
+  <data name="GlazeType" xml:space="preserve"><value>釉薬の種類</value></data>
+  <data name="SurfaceCondition" xml:space="preserve"><value>表面状態</value></data>
+  <data name="FiringAtmosphere" xml:space="preserve"><value>焼成雰囲気</value></data>
+  <data name="FiringType" xml:space="preserve"><value>焼成方法</value></data>
+  <data name="SoilType" xml:space="preserve"><value>粘土の種類</value></data>
+  <data name="ChemicalComposition" xml:space="preserve"><value>化学組成</value></data>
+  <data name="ColorName" xml:space="preserve"><value>色名</value></data>
+  <data name="Color" xml:space="preserve"><value>色</value></data>
+  <data name="Search" xml:space="preserve"><value>検索</value></data>
+  <data name="FindWithAi" xml:space="preserve"><value>AIで探す</value></data>
+  <data name="PromptWatermark" xml:space="preserve"><value>探したいタイルを入力...</value></data>
+  <data name="MatchStrictness" xml:space="preserve"><value>一致度のしきい値</value></data>
+  <data name="MatchMinimum" xml:space="preserve"><value>最低 {0}%</value></data>
+  <data name="Loose" xml:space="preserve"><value>ゆるめ</value></data>
+  <data name="Balanced" xml:space="preserve"><value>標準</value></data>
+  <data name="Strict" xml:space="preserve"><value>厳密</value></data>
+  <data name="StrictnessLoose" xml:space="preserve"><value>ゆるめ（40%以上）</value></data>
+  <data name="StrictnessBalanced" xml:space="preserve"><value>標準（60%以上）</value></data>
+  <data name="StrictnessStrict" xml:space="preserve"><value>厳密（75%以上）</value></data>
+  <data name="SearchImage" xml:space="preserve"><value>画像で検索</value></data>
+  <data name="ChooseTileImage" xml:space="preserve"><value>タイル画像を選択</value></data>
+  <data name="Reset" xml:space="preserve"><value>リセット</value></data>
+  <data name="NoGlazesFound" xml:space="preserve"><value>釉薬が見つかりません</value></data>
+  <data name="AutoTags" xml:space="preserve"><value>自動タグ</value></data>
+  <data name="AutoKeywords" xml:space="preserve"><value>自動キーワード</value></data>
+  <data name="AiTraining" xml:space="preserve"><value>AI学習</value></data>
+  <data name="FeedbackGood" xml:space="preserve"><value>良い</value></data>
+  <data name="FeedbackBad" xml:space="preserve"><value>悪い</value></data>
+  <data name="FeedbackColor" xml:space="preserve"><value>色違い</value></data>
+  <data name="FeedbackEdges" xml:space="preserve"><value>縁</value></data>
+  <data name="TrainWeights" xml:space="preserve"><value>重みを学習</value></data>
+  <data name="SelectTileImage" xml:space="preserve"><value>タイル画像を選択</value></data>
+  <data name="ImageFiles" xml:space="preserve"><value>画像ファイル</value></data>
+  <data name="SenderYou" xml:space="preserve"><value>あなた</value></data>
+  <data name="SenderGlazy" xml:space="preserve"><value>Glazy</value></data>
+  <data name="AiMatch" xml:space="preserve"><value>AI一致度: {0:P1}</value></data>
+  <data name="StatusAiReady" xml:space="preserve"><value>AI検索の準備ができました。</value></data>
+  <data name="StatusDatabaseUnavailable" xml:space="preserve"><value>データベースに接続できません: {0}</value></data>
+  <data name="StatusEnterPrompt" xml:space="preserve"><value>まずAI検索メッセージを入力してください。</value></data>
+  <data name="StatusEnterRefinement" xml:space="preserve"><value>画像結果を絞り込むメッセージを入力するか、別の画像を選択してください。</value></data>
+  <data name="StatusSearchingFor" xml:space="preserve"><value>検索中: {0}</value></data>
+  <data name="StatusNoAiMatches" xml:space="preserve"><value>一致度 {0}% 以上のAI検索結果はありません。</value></data>
+  <data name="StatusShowingLocalMatches" xml:space="preserve"><value>データベース内の {2} 件から、一致度 {1}% 以上の結果を {0} 件表示しています。</value></data>
+  <data name="ChatNoMatches" xml:space="preserve"><value>「{1}」に一致する結果は {0}% 以上では見つかりませんでした。</value></data>
+  <data name="ChatShowingMatches" xml:space="preserve"><value>「{2}」の一致度 {1}% 以上の結果を {0} 件表示しています。</value></data>
+  <data name="StatusAiCanceled" xml:space="preserve"><value>AI検索をキャンセルしました。</value></data>
+  <data name="StatusAiFailed" xml:space="preserve"><value>AI検索に失敗しました: {0}</value></data>
+  <data name="ImageLabel" xml:space="preserve"><value>画像: {0}</value></data>
+  <data name="StatusImageSearching" xml:space="preserve"><value>画像を選択しました。類似タイルを検索しています...</value></data>
+  <data name="StatusNoVisualMatches" xml:space="preserve"><value>一致度 {0}% 以上の類似タイルは見つかりませんでした。</value></data>
+  <data name="StatusShowingVisualMatches" xml:space="preserve"><value>一致度 {1}% 以上の類似タイルを {0} 件表示しています。</value></data>
+  <data name="StatusImageCanceled" xml:space="preserve"><value>画像検索をキャンセルしました。</value></data>
+  <data name="StatusImageFailed" xml:space="preserve"><value>画像検索に失敗しました: {0}</value></data>
+  <data name="StatusImageSelectionFailed" xml:space="preserve"><value>画像を選択できませんでした: {0}</value></data>
+  <data name="StatusAiReset" xml:space="preserve"><value>AI検索をリセットしました。</value></data>
+  <data name="TrainingSelectResult" xml:space="preserve"><value>評価するAI検索結果を選択してください。</value></data>
+  <data name="TrainingSelectTile" xml:space="preserve"><value>評価する前にタイル結果を選択してください。</value></data>
+  <data name="TrainingRunSearch" xml:space="preserve"><value>学習フィードバックを保存する前にAI検索を実行してください。</value></data>
+  <data name="FeedbackGoodSaved" xml:space="preserve"><value>良い結果として保存しました</value></data>
+  <data name="FeedbackBadSaved" xml:space="preserve"><value>悪い結果として保存しました</value></data>
+  <data name="FeedbackWrongColorSaved" xml:space="preserve"><value>色違いとして保存しました</value></data>
+  <data name="FeedbackDarkEdgeSaved" xml:space="preserve"><value>暗い縁の問題として保存しました</value></data>
+  <data name="TrainingReady" xml:space="preserve"><value>{0}。準備ができたら「重みを学習」を実行してください。</value></data>
+  <data name="TrainingInProgress" xml:space="preserve"><value>ランキングの重みを学習中...</value></data>
+  <data name="TrainingFailed" xml:space="preserve"><value>学習に失敗しました: {0}</value></data>
+  <data name="TrainingComplete" xml:space="preserve"><value>学習完了: {0} 件、適合率 {1:P0}。</value></data>
 </root>

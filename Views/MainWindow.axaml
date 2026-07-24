@@ -88,10 +88,41 @@
         </Style>
     </Window.Styles>
 
-    <Grid ColumnDefinitions="400,*,200" RowDefinitions="*">
+    <Grid ColumnDefinitions="400,*,200" RowDefinitions="44,*">
+
+        <Border
+            Grid.Row="0"
+            Grid.ColumnSpan="3"
+            Padding="14,6"
+            Background="#FFFFFF"
+            BorderBrush="#DCE3E8"
+            BorderThickness="0,0,0,1">
+            <Grid ColumnDefinitions="*,Auto,Auto">
+                <TextBlock
+                    VerticalAlignment="Center"
+                    FontSize="16"
+                    FontWeight="DemiBold"
+                    Text="{DynamicResource AppName}" />
+                <TextBlock
+                    Grid.Column="1"
+                    Margin="0,0,8,0"
+                    VerticalAlignment="Center"
+                    Foreground="#5F6B72"
+                    Text="{DynamicResource Language}" />
+                <ComboBox
+                    x:Name="LanguageSelector"
+                    Grid.Column="2"
+                    Width="118"
+                    SelectionChanged="OnLanguageChanged">
+                    <ComboBoxItem Content="{DynamicResource LanguageEnglish}" />
+                    <ComboBoxItem Content="{DynamicResource LanguageJapanese}" />
+                </ComboBox>
+            </Grid>
+        </Border>
 
         <!--  Left Sidebar  -->
         <Border
+            Grid.Row="1"
             Grid.Column="0"
             Background="#F0F0F0"
             BorderBrush="#F0F0F0"
@@ -101,7 +132,7 @@
                 <TabItem
                     FontSize="20"
                     FontWeight="DemiBold"
-                    Header="Glaze Search">
+                    Header="{DynamicResource GlazeSearch}">
                     <ScrollViewer Margin="0,30,0,0" VerticalScrollBarVisibility="Auto">
                         <StackPanel Margin="10" Spacing="5">
                             <color:ColorView
@@ -118,42 +149,42 @@
                                 Color="{Binding SelectedColor, Mode=TwoWay}" />
 
                             <RadioButton
-                                Content="Filter using Spectrum"
+                                Content="{DynamicResource FilterSpectrum}"
                                 GroupName="ColorMode"
                                 IsChecked="{Binding FilterByColor}" />
                             <RadioButton
-                                Content="Filter using Name"
+                                Content="{DynamicResource FilterName}"
                                 GroupName="ColorMode"
                                 IsChecked="{Binding FilterByString}" />
                             <RadioButton
-                                Content="Don't Filter with Color"
+                                Content="{DynamicResource FilterNone}"
                                 GroupName="ColorMode"
                                 IsChecked="{Binding DontFilterByColor}" />
 
-                            <TextBlock Margin="0,0,0,0" Text="Glaze Type" />
+                            <TextBlock Margin="0,0,0,0" Text="{DynamicResource GlazeType}" />
                             <ComboBox ItemsSource="{Binding GlazeTypes}" SelectedItem="{Binding SelectedGlazeType, Mode=TwoWay}" />
 
-                            <TextBlock Margin="0,0,0,0" Text="Surface Condition" />
+                            <TextBlock Margin="0,0,0,0" Text="{DynamicResource SurfaceCondition}" />
                             <ComboBox ItemsSource="{Binding SurfaceConditions}" SelectedItem="{Binding SelectedSurfaceCondition, Mode=TwoWay}" />
-                            <TextBlock Margin="0,0,0,0" Text="Firing Atmosphere" />
+                            <TextBlock Margin="0,0,0,0" Text="{DynamicResource FiringAtmosphere}" />
                             <ComboBox
                                 Width="150"
                                 ItemsSource="{Binding FiringTypes}"
                                 SelectedItem="{Binding SelectedFiringType, Mode=TwoWay}" />
-                            <TextBlock Margin="0,0,0,0" Text="Color Name" />
+                            <TextBlock Margin="0,0,0,0" Text="{DynamicResource ColorName}" />
                             <ComboBox ItemsSource="{Binding ColorPalettes}" SelectedItem="{Binding SelectedColorPalette, Mode=TwoWay}" />
                             <Button
                                 Width="100"
                                 HorizontalAlignment="Right"
                                 Command="{Binding SearchCommand}"
-                                Content="Search" />
+                                Content="{DynamicResource Search}" />
                         </StackPanel>
                     </ScrollViewer>
                 </TabItem>
                 <TabItem
                     FontSize="20"
                     FontWeight="DemiBold"
-                    Header="AI Search">
+                    Header="{DynamicResource AiSearch}">
                     <Grid
                         Margin="10,24,10,10"
                         Background="#F5F7F8"
@@ -171,7 +202,7 @@
                                         <TextBlock
                                             FontSize="15"
                                             FontWeight="DemiBold"
-                                            Text="Find with AI" />
+                                            Text="{DynamicResource FindWithAi}" />
                                     </StackPanel>
                                     <TextBlock
                                         Grid.Column="1"
@@ -231,7 +262,7 @@
                                     Classes="aiPrompt"
                                     Text="{Binding AiSearchPrompt, Mode=TwoWay}"
                                     TextWrapping="Wrap"
-                                    Watermark="Describe the tile you want..." />
+                                    Watermark="{DynamicResource PromptWatermark}" />
                                 <Border 
                                     Width="72"
                                     Height="72"
@@ -257,13 +288,13 @@
                                             FontSize="11"
                                             FontWeight="DemiBold"
                                             Foreground="#46545C"
-                                            Text="Match strictness" />
+                                            Text="{DynamicResource MatchStrictness}" />
                                         <TextBlock
                                             Grid.Column="1"
                                             HorizontalAlignment="Right"
                                             FontSize="11"
                                             Foreground="#176B87"
-                                            Text="{Binding AiMinimumMatchPercent, StringFormat={}{0}% minimum}" />
+                                            Text="{Binding AiMinimumMatchLabel}" />
                                     </Grid>
                                     <Slider
                                         Minimum="0"
@@ -275,19 +306,19 @@
                                         <TextBlock
                                             FontSize="10"
                                             Foreground="#65737A"
-                                            Text="Loose" />
+                                            Text="{DynamicResource Loose}" />
                                         <TextBlock
                                             Grid.Column="1"
                                             HorizontalAlignment="Center"
                                             FontSize="10"
                                             Foreground="#65737A"
-                                            Text="Balanced" />
+                                            Text="{DynamicResource Balanced}" />
                                         <TextBlock
                                             Grid.Column="2"
                                             HorizontalAlignment="Right"
                                             FontSize="10"
                                             Foreground="#65737A"
-                                            Text="Strict" />
+                                            Text="{DynamicResource Strict}" />
                                     </Grid>
                                 </StackPanel>
 
@@ -296,21 +327,21 @@
                                         Grid.Column="0"
                                         Classes="aiButton"
                                         Click="OnAiImageButtonClicked"
-                                        Content="Search image"
-                                        ToolTip.Tip="Choose a tile image" />
+                                        Content="{DynamicResource SearchImage}"
+                                        ToolTip.Tip="{DynamicResource ChooseTileImage}" />
                                     <Button
                                         Grid.Column="1"
                                         Margin="8,0,0,0"
                                         Classes="aiButton"
                                         Command="{Binding ResetAiConversationCommand}"
-                                        Content="Reset" />
+                                        Content="{DynamicResource Reset}" />
                                     <Button
                                         Grid.Column="2"
                                         MinWidth="88"
                                         HorizontalAlignment="Right"
                                         Classes="aiButton primary"
                                         Command="{Binding AiSearchCommand}"
-                                        Content="Search" />
+                                        Content="{DynamicResource Search}" />
                                 </Grid>
                             </StackPanel>
                         </Border>
@@ -321,11 +352,12 @@
 
         <!--  Main Content Area  -->
         <Grid
+            Grid.Row="1"
             Grid.Column="1"
             Margin="20"
             Background="#FFFFFF"
             RowDefinitions="*,Auto">
-            <TextBlock IsVisible="{Binding IsFilterEmpty}" Text="NO GLAZES FOUND" />
+            <TextBlock IsVisible="{Binding IsFilterEmpty}" Text="{DynamicResource NoGlazesFound}" />
 
             <!--  Image Grid  -->
             <ScrollViewer Margin="0,40,0,0" VerticalScrollBarVisibility="Auto">
@@ -372,6 +404,7 @@
         </Grid>
         <!--  Card Info Sidebar  -->
         <Border
+            Grid.Row="1"
             Grid.Column="2"
             Margin="5"
             Background="#F0F0F0"
@@ -391,44 +424,44 @@
                         Height="130"
                         Source="{Binding SelectedCard.Image}" />
                     <TextBlock HorizontalAlignment="Center" TextAlignment="Center">
-                        <Run FontWeight="DemiBold" TextDecorations="Underline" Text="Glaze Type"  />
+                        <Run FontWeight="DemiBold" TextDecorations="Underline" Text="{DynamicResource GlazeType}" />
                     </TextBlock>
                     <TextBlock HorizontalAlignment="Center" TextAlignment="Center">
                         <Run Text="{Binding SelectedCard.GlazeType}" />
                     </TextBlock>
                     <TextBlock HorizontalAlignment="Center" TextAlignment="Center">
-                        <Run FontWeight="DemiBold" TextDecorations="Underline" Text="Firing Type" />
+                        <Run FontWeight="DemiBold" TextDecorations="Underline" Text="{DynamicResource FiringType}" />
                     </TextBlock>
                     <TextBlock HorizontalAlignment="Center" TextAlignment="Center">
                         <Run Text="{Binding SelectedCard.FiringType}" />
                     </TextBlock>
                     <TextBlock HorizontalAlignment="Center" TextAlignment="Center">
-                        <Run FontWeight="DemiBold" TextDecorations="Underline" Text="Soil Type" />
+                        <Run FontWeight="DemiBold" TextDecorations="Underline" Text="{DynamicResource SoilType}" />
                     </TextBlock>
                     <TextBlock HorizontalAlignment="Center" TextAlignment="Center">
                         <Run Text="{Binding SelectedCard.SoilType}" />
                     </TextBlock>
                     <TextBlock HorizontalAlignment="Center" TextAlignment="Center">
-                        <Run FontWeight="DemiBold" TextDecorations="Underline" Text="Surface Condition" />
+                        <Run FontWeight="DemiBold" TextDecorations="Underline" Text="{DynamicResource SurfaceCondition}" />
                     </TextBlock>
                     <TextBlock HorizontalAlignment="Center" TextAlignment="Center">
                         <Run Text="{Binding SelectedCard.SurfaceCondition}" />
                     </TextBlock>
                     <TextBlock HorizontalAlignment="Center" TextAlignment="Center">
-                        <Run FontWeight="DemiBold" TextDecorations="Underline" Text="Chemical Composition" />
+                        <Run FontWeight="DemiBold" TextDecorations="Underline" Text="{DynamicResource ChemicalComposition}" />
                     </TextBlock>
                     <TextBlock HorizontalAlignment="Center" TextAlignment="Center">
                         <Run Text="{Binding SelectedCard.ChemicalComposition}" />
                     </TextBlock>
 
                     <TextBlock HorizontalAlignment="Center" TextAlignment="Center">
-                        <Run FontWeight="DemiBold" TextDecorations="Underline" Text="Color" />
+                        <Run FontWeight="DemiBold" TextDecorations="Underline" Text="{DynamicResource Color}" />
                     </TextBlock>
                     <TextBlock HorizontalAlignment="Center" TextAlignment="Center">
                         <Run Text="{Binding SelectedCard.ColorName}" />
                     </TextBlock>
                     <TextBlock HorizontalAlignment="Center" TextAlignment="Center">
-                        <Run FontWeight="DemiBold" TextDecorations="Underline" Text="Auto Tags" />
+                        <Run FontWeight="DemiBold" TextDecorations="Underline" Text="{DynamicResource AutoTags}" />
                     </TextBlock>
                     <TextBlock
                         HorizontalAlignment="Center"
@@ -436,7 +469,7 @@
                         TextAlignment="Center"
                         TextWrapping="Wrap" />
                     <TextBlock HorizontalAlignment="Center" TextAlignment="Center">
-                        <Run FontWeight="DemiBold" TextDecorations="Underline" Text="Auto Keywords" />
+                        <Run FontWeight="DemiBold" TextDecorations="Underline" Text="{DynamicResource AutoKeywords}" />
                     </TextBlock>
                     <TextBlock
                         HorizontalAlignment="Center"
@@ -454,7 +487,7 @@
                             <TextBlock
                                 HorizontalAlignment="Center"
                                 FontWeight="DemiBold"
-                                Text="AI Training" />
+                                Text="{DynamicResource AiTraining}" />
                             <TextBlock
                                 FontSize="11"
                                 Text="{Binding SelectedCard.AiFeedbackStatus}"
@@ -464,24 +497,24 @@
                                 <Button
                                     Margin="2"
                                     Command="{Binding MarkAiGoodCommand}"
-                                    Content="Good" />
+                                    Content="{DynamicResource FeedbackGood}" />
                                 <Button
                                     Margin="2"
                                     Command="{Binding MarkAiBadCommand}"
-                                    Content="Bad" />
+                                    Content="{DynamicResource FeedbackBad}" />
                                 <Button
                                     Margin="2"
                                     Command="{Binding MarkAiWrongColorCommand}"
-                                    Content="Color" />
+                                    Content="{DynamicResource FeedbackColor}" />
                                 <Button
                                     Margin="2"
                                     Command="{Binding MarkAiHasDarkEdgesCommand}"
-                                    Content="Edges" />
+                                    Content="{DynamicResource FeedbackEdges}" />
                             </UniformGrid>
                             <Button
                                 HorizontalAlignment="Stretch"
                                 Command="{Binding TrainAiRankingCommand}"
-                                Content="Train Weights" />
+                                Content="{DynamicResource TrainWeights}" />
                             <TextBlock
                                 FontSize="11"
                                 Text="{Binding AiTrainingStatus}"
