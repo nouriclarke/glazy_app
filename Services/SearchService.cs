@@ -12,21 +12,29 @@ namespace ASTEM_DB.Services
 
     public class SearchService
     {
-        private const int ResultCount = 10; // adjust as needed
-        private static readonly TimeSpan RequestTimeout = TimeSpan.FromMinutes(5);
+        private const int DefaultResultCount = 10;
+        private static readonly TimeSpan RequestTimeout = TimeSpan.FromSeconds(60);
         private readonly HttpClient _httpClient = new() { Timeout = RequestTimeout };
 
         private static string ApiBase =>
             (Environment.GetEnvironmentVariable("GLAZE_DAEMON_URL") ?? "http://localhost:8000").TrimEnd('/');
 
-        public async Task<List<SearchMatch>> SearchByImageAsync(string imagePath, CancellationToken cancellationToken = default)
+        public async Task<List<SearchMatch>> SearchByImageAsync(
+            string imagePath,
+            CancellationToken cancellationToken = default,
+            int resultCount = DefaultResultCount)
         {
             await using var stream = File.OpenRead(imagePath);
             using var content = new MultipartFormDataContent();
             using var streamContent = new StreamContent(stream);
             content.Add(streamContent, "file", Path.GetFileName(imagePath));
 
-            using var response = await _httpClient.PostAsync($"{ApiBase}/search/image?n_results={ResultCount}", content, cancellationToken);
+            var requestedResults = Math.Clamp(resultCount, 1, 100);
+            using var response = await _httpClient.PostAsync(
+                $"{ApiBase}/search/image?n_results={requestedResults}",
+                content,
+                cancellationToken
+            );
             var json = await response.Content.ReadAsStringAsync(cancellationToken);
 
             if (!response.IsSuccessStatusCode)

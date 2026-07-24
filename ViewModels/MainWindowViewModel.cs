@@ -22,6 +22,8 @@ namespace ASTEM_DB.ViewModels
 {
     public class MainWindowViewModel : ViewModelBase
     {
+        private const int MaxAiResults = 10;
+        private const int CombinedImageCandidateCount = 50;
         private readonly DatabaseService _db = new();
         private readonly SearchService _searchService = new();
         private ObservableCollection<CardItemViewModel> _cardItems = new ObservableCollection<CardItemViewModel>();
@@ -316,6 +318,9 @@ namespace ASTEM_DB.ViewModels
             var cancellationToken = _aiSearchCts.Token;
             var normalizedPrompt = hasText ? NormalizeJapanesePrompt(prompt!) : null;
 
+            // Stop the ordinary database grid from continuing to append thousands
+            // of cards after the AI result set has replaced it.
+            _searchCts?.Cancel();
             IsAiSearchLoading = true;
             CardItems.Clear();
             SelectedCard = null;
@@ -352,7 +357,11 @@ namespace ASTEM_DB.ViewModels
             AiSearchStatus = "Searching by image similarity...";
             AiChatMessages.Add(new AiChatMessageViewModel("You", "[Image search]"));
 
-            var matches = await _searchService.SearchByImageAsync(imagePath);
+            var matches = await _searchService.SearchByImageAsync(
+                imagePath,
+                cancellationToken,
+                CombinedImageCandidateCount
+            );
 
             if (!matches.Any())
             {
@@ -361,15 +370,31 @@ namespace ASTEM_DB.ViewModels
                 return;
             }
 
-            var scoreById = new Dictionary<string, double>();
-            foreach (var m in matches)
-                scoreById[m.TileId] = m.Score;
-            var items = await _db.GetCardItemsByIdsAsync(matches.Select(m => m.TileId));
+            var filteredMatches = matches
+                .Select(match => new
+                {
+                    match.TileId,
+                    MatchScore = ImageDistanceToMatchScore(match.Score)
+                })
+                .Where(match => match.MatchScore >= AiMinimumMatchScore)
+                .GroupBy(match => match.TileId)
+                .Select(group => group.OrderByDescending(match => match.MatchScore).First())
+                .OrderByDescending(match => match.MatchScore)
+                .Take(MaxAiResults)
+                .ToList();
+            var scoreById = filteredMatches.ToDictionary(
+                match => match.TileId,
+                match => match.MatchScore
+            );
+            var items = await _db.GetCardItemsByIdsAsync(
+                filteredMatches.Select(match => match.TileId)
+            );
+            cancellationToken.ThrowIfCancellationRequested();
 
             foreach (var item in items)
             {
-                if (scoreById.TryGetValue(item.Id, out var dist))
-                    item.AiScore = Math.Exp(-dist / 2.0);
+                if (scoreById.TryGetValue(item.Id, out var matchScore))
+                    item.AiScore = matchScore;
                 var lab = new Lab { L = item.ColorL, A = item.ColorA, B = item.ColorB };
                 item.ColorName = GetColorName(lab);
                 CardItems.Add(item);
@@ -388,30 +413,46 @@ namespace ASTEM_DB.ViewModels
             AiSearchPrompt = string.Empty;
             AiResolvedSearchPrompt = resolvedPrompt;
 
-            var clipMatches = await _searchService.SearchByImageAsync(imagePath);
-            var clipDistanceById = clipMatches.ToDictionary(m => m.TileId, m => m.Score);
+            var clipMatches = await _searchService.SearchByImageAsync(
+                imagePath,
+                cancellationToken,
+                CombinedImageCandidateCount
+            );
+            var clipScoreById = clipMatches
+                .GroupBy(match => match.TileId)
+                .ToDictionary(
+                    group => group.Key,
+                    group => group.Max(match => ImageDistanceToMatchScore(match.Score))
+                );
 
             cancellationToken.ThrowIfCancellationRequested();
 
             AiSearchStatus = "Re-ranking by text and color...";
             var textResponse = await RunLocalAiSearchAsync(resolvedPrompt, cancellationToken);
-            var textScoreById = textResponse.Results.ToDictionary(r => r.Id, r => r.FinalScore);
+            var textScoreById = textResponse.Results
+                .GroupBy(result => result.Id)
+                .ToDictionary(
+                    group => group.Key,
+                    group => group.Max(GetDisplayMatchScore)
+                );
 
             cancellationToken.ThrowIfCancellationRequested();
 
-            var combined = clipDistanceById
+            var combined = clipScoreById
                 .Select(kvp => new
                 {
                     Id = kvp.Key,
-                    ClipSim = Math.Exp(-kvp.Value / 2.0),
+                    ClipScore = kvp.Value,
                     TextScore = textScoreById.TryGetValue(kvp.Key, out var ts) ? ts : 0.0
                 })
                 .Select(x => new
                 {
                     x.Id,
-                    CombinedScore = 0.6 * x.ClipSim + 0.4 * x.TextScore
+                    CombinedScore = 0.65 * x.ClipScore + 0.35 * x.TextScore
                 })
+                .Where(x => x.CombinedScore >= AiMinimumMatchScore)
                 .OrderByDescending(x => x.CombinedScore)
+                .Take(MaxAiResults)
                 .ToList();
 
             var items = await _db.GetCardItemsByIdsAsync(combined.Select(x => x.Id));
@@ -447,8 +488,21 @@ namespace ASTEM_DB.ViewModels
             var response = await RunLocalAiSearchAsync(resolvedPrompt, cancellationToken);
             cancellationToken.ThrowIfCancellationRequested();
 
-            var idToScore = response.Results.ToDictionary(r => r.Id, r => r.FinalScore);
-            var items = await _db.GetCardItemsByIdsAsync(response.Results.Select(r => r.Id));
+            var filteredResults = response.Results
+                .Where(result => GetDisplayMatchScore(result) >= AiMinimumMatchScore)
+                .GroupBy(result => result.Id)
+                .Select(group => group.OrderByDescending(GetDisplayMatchScore).First())
+                .OrderByDescending(GetDisplayMatchScore)
+                .Take(MaxAiResults)
+                .ToList();
+            var idToScore = filteredResults.ToDictionary(
+                result => result.Id,
+                GetDisplayMatchScore
+            );
+            var items = await _db.GetCardItemsByIdsAsync(
+                filteredResults.Select(result => result.Id)
+            );
+            cancellationToken.ThrowIfCancellationRequested();
 
             foreach (var item in items)
             {
@@ -1293,6 +1347,7 @@ namespace ASTEM_DB.ViewModels
                 cancellationToken.ThrowIfCancellationRequested();
 
                 var image = await _db.GetImageByIdAsync(item.Id);
+                cancellationToken.ThrowIfCancellationRequested();
                 if (image != null)
                     item.Image = image;
                 CardItems.Add(item);
